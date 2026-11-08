@@ -1,0 +1,2764 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Offline P2P Payment Architecture — Synchronized BLE &amp; TEE Protocol Simulator</title>
+  <!-- Tailwind CSS -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- Three.js r128 -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+  <!-- Google Fonts: Inter & JetBrains Mono -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+
+  <style>
+    :root, html[data-theme="dark"] {
+      --bg-canvas: #0B0C0E;
+      --bg-surface: #121418;
+      --bg-elevated: #181B20;
+      --bg-hover: #1F232B;
+      --bg-glass: rgba(18, 20, 24, 0.88);
+      --border-hairline: rgba(255, 255, 255, 0.08);
+      --border-strong: rgba(255, 255, 255, 0.16);
+      --text-primary: #F3F4F6;
+      --text-secondary: #9CA3AF;
+      --text-muted: #6B7280;
+      --accent-primary: #6366F1;
+      --accent-blue: #3B82F6;
+      --accent-emerald: #10B981;
+      --accent-amber: #F59E0B;
+      --accent-red: #EF4444;
+      --code-bg: #08090B;
+      --shadow-card: 0 10px 30px -5px rgba(0, 0, 0, 0.55);
+    }
+
+    html[data-theme="light"] {
+      --bg-canvas: #F1F5F9;
+      --bg-surface: #FFFFFF;
+      --bg-elevated: #F8FAFC;
+      --bg-hover: #EFF6FF;
+      --bg-glass: rgba(255, 255, 255, 0.90);
+      --border-hairline: rgba(15, 23, 42, 0.09);
+      --border-strong: rgba(15, 23, 42, 0.18);
+      --text-primary: #0F172A;
+      --text-secondary: #475569;
+      --text-muted: #64748B;
+      --accent-primary: #4F46E5;
+      --accent-blue: #2563EB;
+      --accent-emerald: #059669;
+      --accent-amber: #D97706;
+      --accent-red: #DC2626;
+      --code-bg: #0F172A;
+      --shadow-card: 0 8px 24px -4px rgba(15, 23, 42, 0.10);
+    }
+
+    * {
+      box-sizing: border-box;
+      user-select: none;
+      -webkit-font-smoothing: antialiased;
+    }
+
+    body, html {
+      margin: 0;
+      padding: 0;
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+      font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+      background-color: var(--bg-canvas);
+      color: var(--text-primary);
+      transition: background-color 0.25s ease, color 0.25s ease;
+    }
+
+    .font-mono-code {
+      font-family: 'JetBrains Mono', monospace;
+      user-select: text;
+    }
+
+    /* Architectural Surfaces */
+    .surface-panel {
+      background-color: var(--bg-surface);
+      border-color: var(--border-hairline);
+    }
+
+    .surface-card {
+      background-color: var(--bg-elevated);
+      border: 1px solid var(--border-hairline);
+      transition: border-color 0.15s ease, background-color 0.15s ease, transform 0.15s ease;
+    }
+
+    .surface-card-interactive:hover {
+      border-color: var(--border-strong);
+      background-color: var(--bg-hover);
+    }
+
+    .surface-glass {
+      background: var(--bg-glass);
+      backdrop-filter: blur(12px);
+      -webkit-backdrop-filter: blur(12px);
+      border: 1px solid var(--border-hairline);
+      box-shadow: var(--shadow-card);
+    }
+
+    .text-pri { color: var(--text-primary); }
+    .text-sec { color: var(--text-secondary); }
+    .text-mut { color: var(--text-muted); }
+    .border-hair { border-color: var(--border-hairline); }
+
+    /* Custom Scrollbars */
+    ::-webkit-scrollbar {
+      width: 5px;
+      height: 5px;
+    }
+    ::-webkit-scrollbar-track {
+      background: transparent;
+    }
+    ::-webkit-scrollbar-thumb {
+      background: rgba(148, 163, 184, 0.25);
+      border-radius: 9999px;
+    }
+    ::-webkit-scrollbar-thumb:hover {
+      background: rgba(148, 163, 184, 0.45);
+    }
+
+    /* Projected 3D HTML Node Telemetry Cards */
+    .node-card-3d {
+      position: absolute;
+      transform: translate(-50%, -105%);
+      pointer-events: auto;
+      cursor: pointer;
+      z-index: 15;
+      background: var(--bg-glass);
+      backdrop-filter: blur(10px);
+      -webkit-backdrop-filter: blur(10px);
+      border: 1px solid var(--border-hairline);
+      border-radius: 10px;
+      padding: 8px 11px;
+      min-width: 162px;
+      box-shadow: var(--shadow-card);
+      transition: border-color 0.18s ease, box-shadow 0.18s ease;
+    }
+
+    .node-card-3d:hover {
+      border-color: var(--border-strong);
+    }
+
+    .node-card-3d.active-node {
+      border-color: #6366F1;
+      box-shadow: 0 0 0 1px #6366F1, var(--shadow-card);
+    }
+
+    .node-card-3d::after {
+      content: '';
+      position: absolute;
+      bottom: -5px;
+      left: 50%;
+      transform: translateX(-50%) rotate(45deg);
+      width: 8px;
+      height: 8px;
+      background: var(--bg-surface);
+      border-right: 1px solid var(--border-hairline);
+      border-bottom: 1px solid var(--border-hairline);
+    }
+
+    .node-card-3d.active-node::after {
+      border-right-color: #6366F1;
+      border-bottom-color: #6366F1;
+    }
+
+    /* In-Flight Packet Floating Callout */
+    .packet-callout-3d {
+      position: absolute;
+      transform: translate(-50%, -140%);
+      pointer-events: none;
+      z-index: 25;
+      background: #0F172A;
+      color: #F8FAFC;
+      border: 1px solid rgba(99, 102, 241, 0.5);
+      border-radius: 8px;
+      padding: 5px 10px;
+      font-size: 11px;
+      white-space: nowrap;
+      box-shadow: 0 8px 20px rgba(0, 0, 0, 0.45);
+      transition: opacity 0.15s ease;
+    }
+
+    /* Subtle Range Input Styling */
+    input[type="range"] {
+      -webkit-appearance: none;
+      appearance: none;
+      height: 5px;
+      border-radius: 999px;
+      background: rgba(148, 163, 184, 0.25);
+      outline: none;
+    }
+    input[type="range"]::-webkit-slider-thumb {
+      -webkit-appearance: none;
+      appearance: none;
+      width: 15px;
+      height: 15px;
+      border-radius: 50%;
+      background: #6366F1;
+      cursor: pointer;
+      border: 2px solid #FFFFFF;
+      box-shadow: 0 1px 4px rgba(0,0,0,0.3);
+    }
+  </style>
+</head>
+<body class="flex flex-col h-screen w-screen overflow-hidden">
+
+  <!-- ==================== 1. TOP ARCHITECTURAL HEADER BAR (56px) ==================== -->
+  <header class="h-14 w-full surface-panel border-b border-hair px-4 flex items-center justify-between gap-3 shrink-0 z-30">
+    
+    <!-- Left: Minimal System Brand & Protocol Subtitle -->
+    <div class="flex items-center gap-3 min-w-0">
+      <div class="w-8 h-8 rounded-lg bg-indigo-600 flex items-center justify-center text-white font-mono-code font-semibold text-xs tracking-tighter shadow-sm shrink-0">
+        P2P
+      </div>
+      <div class="truncate">
+        <div class="flex items-center gap-2">
+          <h1 class="text-xs sm:text-sm font-semibold tracking-tight text-pri truncate">Offline P2P Payment Architecture</h1>
+          <span class="hidden xl:inline-flex items-center px-2 py-0.5 rounded text-[10px] font-mono-code font-medium bg-indigo-500/10 text-indigo-400 border border-indigo-500/20">
+            Synchronized BLE + TEE Protocol
+          </span>
+        </div>
+        <p class="text-[11px] text-sec hidden sm:block truncate">Time-Dependent HMAC Authorization &amp; Opportunistic Witness Network</p>
+      </div>
+    </div>
+
+    <!-- Center: Segmented Mode Switcher -->
+    <nav class="flex items-center p-1 rounded-lg surface-card shrink-0" aria-label="Simulation Modes">
+      <button onclick="switchModeTab('scenario')" id="mode-btn-scenario" class="px-3 py-1.5 rounded-md text-xs font-medium transition flex items-center gap-1.5 bg-indigo-600 text-white shadow-sm">
+        <span class="font-mono-code text-[10px] opacity-80">01</span>
+        <span>Guided Scenario</span>
+      </button>
+      <button onclick="switchModeTab('sandbox')" id="mode-btn-sandbox" class="px-3 py-1.5 rounded-md text-xs font-medium transition flex items-center gap-1.5 text-sec hover:text-pri">
+        <span class="font-mono-code text-[10px] opacity-70">02</span>
+        <span>Live Sandbox</span>
+      </button>
+      <button onclick="switchModeTab('security')" id="mode-btn-security" class="px-3 py-1.5 rounded-md text-xs font-medium transition flex items-center gap-1.5 text-sec hover:text-pri">
+        <span class="font-mono-code text-[10px] opacity-70">03</span>
+        <span>Threat &amp; Attack Lab</span>
+      </button>
+    </nav>
+
+    <!-- Right: Global Synchronized Cryptographic Clock & Studio Controls -->
+    <div class="flex items-center gap-2.5 shrink-0">
+      
+      <!-- 30s Epoch Schedule Widget -->
+      <div class="hidden lg:flex items-center gap-3 px-3 py-1 rounded-lg surface-card">
+        <!-- Countdown & Progress Bar -->
+        <div class="w-28">
+          <div class="flex items-center justify-between text-[10px] font-mono-code">
+            <span class="text-sec uppercase">Epoch Timer</span>
+            <span id="hdr-epoch-countdown" class="font-semibold text-pri">00:30s</span>
+          </div>
+          <div class="w-full h-1.5 bg-slate-500/20 rounded-full overflow-hidden mt-1">
+            <div id="hdr-epoch-bar" class="h-full bg-indigo-500 transition-all duration-150" style="width: 100%"></div>
+          </div>
+        </div>
+
+        <div class="h-6 w-px bg-slate-500/20"></div>
+
+        <!-- Tolerance Window (Prev | Active | Next) -->
+        <div class="flex items-center gap-1 font-mono-code text-[11px]">
+          <span id="hdr-prev-epoch" class="px-1.5 py-0.5 rounded text-mut bg-slate-500/10" title="Previous Permitted Epoch (N-1)">E-99</span>
+          <span id="hdr-curr-epoch" class="px-2 py-0.5 rounded font-semibold bg-indigo-500/15 text-indigo-400 border border-indigo-500/30" title="Current Active Time Epoch (N)">E-100</span>
+          <span id="hdr-next-epoch" class="px-1.5 py-0.5 rounded text-mut bg-slate-500/10" title="Next Permitted Epoch (N+1)">E-101</span>
+        </div>
+
+        <div class="h-6 w-px bg-slate-500/20 hidden 2xl:block"></div>
+
+        <!-- Daily Schedule & Live Kt Derivation -->
+        <div class="hidden 2xl:flex flex-col text-[10px] font-mono-code leading-tight">
+          <div class="flex items-center gap-1.5">
+            <span id="hdr-sim-clock" class="text-pri font-semibold">16:00:00</span>
+            <span id="hdr-daily-label" class="text-sec">· Day 1 (4 PM)</span>
+          </div>
+          <div class="text-emerald-400 truncate max-w-[165px]" id="hdr-kt-formula">Kt = HMAC(Kd, 100) = 0x8f9a..</div>
+        </div>
+      </div>
+
+      <!-- Quick Clock Actions -->
+      <div class="flex items-center gap-1">
+        <button onclick="toggleClockPause()" id="btn-clock-pause" class="px-2.5 py-1.5 rounded-lg surface-card surface-card-interactive text-xs font-mono-code text-pri flex items-center gap-1" title="Pause / Resume 30-Second Clock">
+          <span id="clock-state-dot" class="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
+          <span id="clock-state-label">1x</span>
+        </button>
+        <button onclick="manualAdvanceEpoch()" class="px-2.5 py-1.5 rounded-lg surface-card surface-card-interactive text-xs font-medium text-pri hover:border-indigo-500/50 transition" title="Advance 30 Seconds to Next Cryptographic Epoch">
+          +30s Epoch
+        </button>
+        <button onclick="triggerDaily4PMRotation()" class="hidden sm:inline-flex px-2.5 py-1.5 rounded-lg surface-card surface-card-interactive text-xs font-medium text-sec hover:text-pri transition" title="Simulate 4:00 PM Daily Key Rotation">
+          4:00 PM Rotate
+        </button>
+        <button onclick="toggleStudioTheme()" id="btn-theme-toggle" class="px-2.5 py-1.5 rounded-lg surface-card surface-card-interactive text-xs font-medium text-sec hover:text-pri transition" title="Switch Light / Dark Studio Theme">
+          Theme
+        </button>
+      </div>
+
+    </div>
+  </header>
+
+  <!-- ==================== 2. MAIN 3-COLUMN ARCHITECTURAL WORKSPACE ==================== -->
+  <div class="flex-1 flex overflow-hidden relative">
+
+    <!-- ==================== LEFT WORKSPACE PANEL (360px) ==================== -->
+    <aside class="w-80 sm:w-[360px] h-full surface-panel border-r border-hair flex flex-col shrink-0 z-20">
+      
+      <!-- MODE 01: GUIDED SCENARIO WALKTHROUGH -->
+      <div id="panel-mode-scenario" class="flex-1 flex flex-col overflow-hidden">
+        <!-- Panel Header -->
+        <div class="p-4 border-b border-hair flex items-center justify-between gap-2">
+          <div>
+            <div class="text-[10px] font-mono-code uppercase tracking-wider text-indigo-400 font-semibold">Real-World Timeline · Section 11</div>
+            <h2 class="text-sm font-semibold text-pri mt-0.5">Rahim, Karim &amp; Hasan Scenario</h2>
+          </div>
+          <button onclick="resetFullSimulation()" class="px-2.5 py-1 rounded-md surface-card surface-card-interactive text-[11px] font-medium text-sec hover:text-pri">
+            Reset
+          </button>
+        </div>
+
+        <!-- Step Controls Bar -->
+        <div class="px-4 py-2.5 border-b border-hair flex items-center justify-between gap-2 bg-slate-500/5">
+          <button onclick="runPrevScenarioStep()" id="btn-prev-step" class="px-2.5 py-1.5 rounded-md surface-card surface-card-interactive text-xs font-medium text-sec hover:text-pri disabled:opacity-40">
+            &larr; Prev
+          </button>
+          <div class="text-[11px] font-mono-code text-sec">
+            Step <span id="scenario-step-indicator" class="text-pri font-semibold">1</span> of 7
+          </div>
+          <div class="flex items-center gap-1.5">
+            <button onclick="toggleAutoPlayScenario()" id="btn-autoplay" class="px-2.5 py-1.5 rounded-md surface-card surface-card-interactive text-xs font-medium text-sec hover:text-pri">
+              Auto-Play
+            </button>
+            <button onclick="runNextScenarioStep()" id="btn-next-step" class="px-3 py-1.5 rounded-md bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-medium shadow-sm transition">
+              Next Step &rarr;
+            </button>
+          </div>
+        </div>
+
+        <!-- 7-Step Storyboard List -->
+        <div id="scenario-steps-container" class="flex-1 overflow-y-auto p-3 space-y-2">
+          <!-- Populated dynamically by JS -->
+        </div>
+
+        <!-- Scenario Footer Summary -->
+        <div class="p-3 border-t border-hair text-[11px] text-sec flex items-center justify-between bg-slate-500/5">
+          <span>Currency: <strong class="text-pri font-mono-code">BDT (৳1 = 100 poisha)</strong></span>
+          <span>Offline Cap: <strong class="text-pri font-mono-code">৳1,000</strong></span>
+        </div>
+      </div>
+
+      <!-- MODE 02: LIVE SANDBOX (CUSTOM P2P & NODE CONNECTIVITY MATRIX) -->
+      <div id="panel-mode-sandbox" class="flex-1 flex flex-col overflow-y-auto hidden divide-y divide-slate-500/10">
+        
+        <!-- Custom BLE Payment Builder -->
+        <div class="p-4 space-y-3.5">
+          <div>
+            <div class="text-[10px] font-mono-code uppercase tracking-wider text-indigo-400 font-semibold">Offline BLE Transaction Builder</div>
+            <h2 class="text-sm font-semibold text-pri mt-0.5">Create Custom Peer-to-Peer Payment</h2>
+          </div>
+
+          <div class="grid grid-cols-2 gap-2.5">
+            <div>
+              <label class="block text-[11px] font-medium text-sec mb-1">Sender (Payer)</label>
+              <select id="sandbox-sender" onchange="updateSandboxPreview()" class="w-full px-2.5 py-1.5 rounded-lg surface-card text-xs text-pri focus:outline-none focus:border-indigo-500">
+                <option value="rahim" selected>Rahim (WALLET-A)</option>
+                <option value="karim">Karim (WALLET-B)</option>
+                <option value="hasan">Hasan (WALLET-C)</option>
+                <option value="witnessD">Witness D (WALLET-D)</option>
+                <option value="witnessE">Witness E (WALLET-E)</option>
+              </select>
+            </div>
+            <div>
+              <label class="block text-[11px] font-medium text-sec mb-1">Receiver (Payee)</label>
+              <select id="sandbox-receiver" onchange="updateSandboxPreview()" class="w-full px-2.5 py-1.5 rounded-lg surface-card text-xs text-pri focus:outline-none focus:border-indigo-500">
+                <option value="karim" selected>Karim (WALLET-B)</option>
+                <option value="hasan">Hasan (WALLET-C)</option>
+                <option value="rahim">Rahim (WALLET-A)</option>
+                <option value="witnessD">Witness D (WALLET-D)</option>
+                <option value="witnessE">Witness E (WALLET-E)</option>
+              </select>
+            </div>
+          </div>
+
+          <!-- Amount Selector & Poisha Conversion -->
+          <div class="p-3 rounded-lg surface-card space-y-2.5">
+            <div class="flex items-baseline justify-between">
+              <span class="text-xs font-medium text-sec">Transfer Amount</span>
+              <div class="text-right font-mono-code">
+                <span id="sandbox-amount-bdt" class="text-base font-semibold text-pri">৳300</span>
+                <span id="sandbox-amount-poisha" class="text-[11px] text-sec ml-1">(30,000 poisha)</span>
+              </div>
+            </div>
+
+            <input id="sandbox-amount-slider" type="range" min="50" max="600" step="50" value="300" oninput="updateSandboxPreview()" class="w-full" />
+
+            <!-- Quick Preset Amounts -->
+            <div class="grid grid-cols-4 gap-1.5 pt-0.5">
+              <button onclick="setSandboxAmount(100)" class="py-1 rounded surface-panel border border-hair text-[11px] font-mono-code text-sec hover:text-pri">৳100</button>
+              <button onclick="setSandboxAmount(200)" class="py-1 rounded surface-panel border border-hair text-[11px] font-mono-code text-sec hover:text-pri">৳200</button>
+              <button onclick="setSandboxAmount(300)" class="py-1 rounded surface-panel border border-emerald-500/30 text-[11px] font-mono-code text-emerald-400 font-medium">৳300 Cap</button>
+              <button onclick="setSandboxAmount(500)" class="py-1 rounded surface-panel border border-amber-500/30 text-[11px] font-mono-code text-amber-400">৳500</button>
+            </div>
+          </div>
+
+          <!-- Active Policy Guardrails -->
+          <div class="p-3 rounded-lg surface-card space-y-2 text-xs">
+            <div class="flex items-center justify-between">
+              <label class="flex items-center gap-2 text-sec cursor-pointer">
+                <input type="checkbox" id="sandbox-enforce-cap" checked onchange="updateSandboxPreview()" class="rounded accent-indigo-500" />
+                <span>Enforce ৳300 Single-TX Policy Cap</span>
+              </label>
+              <span class="font-mono-code text-[10px] text-mut">Sec. 6</span>
+            </div>
+            <div class="flex items-center justify-between text-[11px] text-sec pt-1 border-t border-hair">
+              <span>Max Offline Allocation: <strong class="text-pri font-mono-code">৳1,000</strong></span>
+              <span>Max Offline TXs: <strong class="text-pri font-mono-code">10</strong></span>
+            </div>
+          </div>
+
+          <button onclick="executeSandboxTransfer()" class="w-full py-2.5 px-4 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white font-medium text-xs shadow-sm transition flex items-center justify-center gap-2">
+            <span>Sign &amp; Transmit Offline BLE Payment</span>
+          </button>
+        </div>
+
+        <!-- Network Connectivity & Lease Matrix -->
+        <div class="p-4 space-y-3">
+          <div class="flex items-center justify-between">
+            <div>
+              <div class="text-[10px] font-mono-code uppercase tracking-wider text-sec font-semibold">Opportunistic Sync · Section 8 &amp; 9</div>
+              <h3 class="text-xs font-semibold text-pri mt-0.5">Device Internet &amp; 24h Lease Control</h3>
+            </div>
+          </div>
+          <p class="text-[11px] text-sec leading-relaxed">
+            Toggle any registered phone <strong class="text-pri">Online</strong> to upload its stored witness evidence and pending receipts to the Central Server.
+          </p>
+
+          <div id="sandbox-node-matrix" class="space-y-1.5">
+            <!-- Populated by JS -->
+          </div>
+
+          <div class="grid grid-cols-2 gap-2 pt-2">
+            <button onclick="expireSelectedNodeLease()" class="py-2 px-2.5 rounded-lg surface-card surface-card-interactive text-[11px] font-medium text-amber-400 border border-amber-500/25 text-center">
+              Expire Rahim 24h Lease
+            </button>
+            <button onclick="syncAllNodesOnline()" class="py-2 px-2.5 rounded-lg surface-card surface-card-interactive text-[11px] font-medium text-emerald-400 border border-emerald-500/25 text-center">
+              Sync All Phones Online
+            </button>
+          </div>
+        </div>
+
+      </div>
+
+      <!-- MODE 03: THREAT & ATTACK LAB -->
+      <div id="panel-mode-security" class="flex-1 flex flex-col overflow-y-auto hidden p-4 space-y-3.5">
+        <div>
+          <div class="text-[10px] font-mono-code uppercase tracking-wider text-red-400 font-semibold">Adversarial Verification · Section 5, 7 &amp; 10</div>
+          <h2 class="text-sm font-semibold text-pri mt-0.5">Threat &amp; Double-Spend Attack Lab</h2>
+          <p class="text-[11px] text-sec mt-1 leading-relaxed">
+            Test how synchronized time epochs, hardware-backed monotonic counters, and nearby BLE witnesses defend against offline attacks.
+          </p>
+        </div>
+
+        <!-- Attack A Card -->
+        <div class="p-3.5 rounded-xl surface-card space-y-2.5">
+          <div class="flex items-center justify-between">
+            <span class="px-2 py-0.5 rounded text-[10px] font-mono-code font-semibold bg-red-500/15 text-red-400 border border-red-500/25">ATTACK A · REPLAY</span>
+            <span class="text-[10px] font-mono-code text-sec">Defense: 30s HMAC Epoch</span>
+          </div>
+          <h3 class="text-xs font-semibold text-pri">Expired Epoch Packet Replay</h3>
+          <p class="text-[11px] text-sec leading-relaxed">
+            Attacker captures Rahim's valid <code class="font-mono-code text-pri">Epoch 100</code> BLE frame (<code class="font-mono-code text-pri">৳300</code>) and re-transmits it after the global schedule advances to <code class="font-mono-code text-pri">Epoch 102+</code>.
+          </p>
+          <button onclick="simulateReplayAttack()" class="w-full py-2 px-3 rounded-lg bg-red-500/15 hover:bg-red-500/25 text-red-300 border border-red-500/30 text-xs font-medium transition">
+            Simulate Packet Replay Attack
+          </button>
+        </div>
+
+        <!-- Attack B1 Card -->
+        <div class="p-3.5 rounded-xl surface-card space-y-2.5">
+          <div class="flex items-center justify-between">
+            <span class="px-2 py-0.5 rounded text-[10px] font-mono-code font-semibold bg-amber-500/15 text-amber-400 border border-amber-500/25">ATTACK B1 · STATE ROLLBACK</span>
+            <span class="text-[10px] font-mono-code text-sec">Defense: TEE Counter</span>
+          </div>
+          <h3 class="text-xs font-semibold text-pri">Same-Epoch Wallet Backup Restore</h3>
+          <p class="text-[11px] text-sec leading-relaxed">
+            Rahim backs up his wallet at <code class="font-mono-code text-pri">10:00:05</code> (<code class="font-mono-code text-pri">৳1,000</code>), pays <code class="font-mono-code text-pri">৳300</code> at <code class="font-mono-code text-pri">10:00:10</code> (TEE counter increments <code class="font-mono-code text-pri">#184 &rarr; #185</code>), and restores the backup at <code class="font-mono-code text-pri">10:00:20</code> (still inside <code class="font-mono-code text-pri">Epoch 100</code>).
+          </p>
+          <button onclick="simulateBackupRollbackTEE()" class="w-full py-2 px-3 rounded-lg bg-amber-500/15 hover:bg-amber-500/25 text-amber-300 border border-amber-500/30 text-xs font-medium transition">
+            Simulate App Backup Rollback (TEE Check)
+          </button>
+        </div>
+
+        <!-- Attack B2 Card -->
+        <div class="p-3.5 rounded-xl surface-card space-y-2.5">
+          <div class="flex items-center justify-between">
+            <span class="px-2 py-0.5 rounded text-[10px] font-mono-code font-semibold bg-indigo-500/15 text-indigo-400 border border-indigo-500/25">ATTACK B2 · SPLIT-BRAIN FORK</span>
+            <span class="text-[10px] font-mono-code text-sec">Defense: BLE Witnesses</span>
+          </div>
+          <h3 class="text-xs font-semibold text-pri">Conflicting Sequence Double-Spend</h3>
+          <p class="text-[11px] text-sec leading-relaxed">
+            A compromised device broadcasts two different payments (<code class="font-mono-code text-pri">TX-FORK-A</code> to Karim and <code class="font-mono-code text-pri">TX-FORK-B</code> to Hasan) reusing sequence <code class="font-mono-code text-pri">device_counter: #185</code>. Nearby witnesses upload both hashes to the server.
+          </p>
+          <button onclick="simulateWitnessConflictAttack()" class="w-full py-2 px-3 rounded-lg bg-indigo-500/15 hover:bg-indigo-500/25 text-indigo-300 border border-indigo-500/30 text-xs font-medium transition">
+            Simulate Conflicting Sequence Broadcast
+          </button>
+        </div>
+
+      </div>
+
+    </aside>
+
+    <!-- ==================== CENTER 3D INTERACTIVE STAGE (UNOBSTRUCTED) ==================== -->
+    <main id="stage-container" class="flex-1 h-full relative overflow-hidden">
+      
+      <!-- Three.js WebGL Viewport -->
+      <div id="canvas-container" class="absolute inset-0 w-full h-full"></div>
+
+      <!-- 2D Projected HTML Node Cards Layer -->
+      <div id="labels-container" class="absolute inset-0 pointer-events-none overflow-hidden z-10"></div>
+
+      <!-- In-Flight 3D Packet Callout Badge -->
+      <div id="inflight-packet-label" class="packet-callout-3d opacity-0 font-mono-code"></div>
+
+      <!-- Top-Center Architectural Context & Active Security Layers Banner -->
+      <div class="absolute top-4 left-4 right-4 flex justify-center pointer-events-none z-20">
+        <div class="surface-glass rounded-xl px-4 py-3 max-w-2xl w-full pointer-events-auto">
+          <div class="flex items-center justify-between gap-3">
+            <div class="flex items-center gap-2">
+              <span id="banner-status-dot" class="w-2 h-2 rounded-full bg-indigo-500"></span>
+              <span id="banner-step-tag" class="text-[10px] font-mono-code uppercase tracking-wider font-semibold text-indigo-400">PROTOCOL STATE · EPOCH 100</span>
+            </div>
+            <span id="banner-time-tag" class="text-[11px] font-mono-code text-sec">16:00:00 · Offline Mode</span>
+          </div>
+          <h3 id="banner-title" class="text-xs sm:text-sm font-semibold text-pri mt-1">
+            4:00 PM Daily Cryptographic Period Active
+          </h3>
+          <p id="banner-description" class="text-[11px] text-sec mt-0.5 leading-relaxed">
+            All registered smartphones operate on the synchronized 30-second HMAC schedule derived from their daily server credential. Rahim has ৳1,000 allocated to his hardware-protected offline wallet.
+          </p>
+          <!-- Active Security Layers Pills -->
+          <div id="banner-layers-row" class="flex flex-wrap items-center gap-1.5 mt-2 pt-2 border-t border-hair">
+            <!-- Populated dynamically -->
+          </div>
+        </div>
+      </div>
+
+      <!-- Bottom-Center Camera & Spatial Topology Bar -->
+      <div class="absolute bottom-4 left-1/2 -translate-x-1/2 z-20 flex items-center gap-1.5 p-1.5 rounded-xl surface-glass">
+        <span class="text-[10px] font-mono-code uppercase tracking-wider text-sec px-2 hidden sm:inline">View:</span>
+        <button onclick="setCameraPreset('overview')" id="cam-btn-overview" class="px-2.5 py-1 rounded-lg text-xs font-medium bg-indigo-600 text-white transition">Overview</button>
+        <button onclick="setCameraPreset('p2p')" id="cam-btn-p2p" class="px-2.5 py-1 rounded-lg text-xs font-medium text-sec hover:text-pri transition">P2P Close-up</button>
+        <button onclick="setCameraPreset('mesh')" id="cam-btn-mesh" class="px-2.5 py-1 rounded-lg text-xs font-medium text-sec hover:text-pri transition">Witness Mesh</button>
+        <button onclick="setCameraPreset('server')" id="cam-btn-server" class="px-2.5 py-1 rounded-lg text-xs font-medium text-sec hover:text-pri transition">Server Uplink</button>
+        <div class="h-4 w-px bg-slate-500/20 mx-0.5"></div>
+        <div class="hidden xl:flex items-center gap-3 px-2 text-[10px] text-sec">
+          <span class="flex items-center gap-1"><span class="w-2 h-2 rounded-full bg-indigo-500"></span>BLE Payment</span>
+          <span class="flex items-center gap-1"><span class="w-2 h-2 rounded-full bg-amber-500"></span>Witness Hash</span>
+          <span class="flex items-center gap-1"><span class="w-2 h-2 rounded-full bg-emerald-500"></span>Server Sync</span>
+        </div>
+      </div>
+
+    </main>
+
+    <!-- ==================== RIGHT TELEMETRY & CRYPTO INSPECTOR PANEL (390px) ==================== -->
+    <aside class="w-80 sm:w-[390px] h-full surface-panel border-l border-hair flex flex-col shrink-0 z-20 overflow-hidden">
+      
+      <!-- Inspector Section Switcher -->
+      <div class="p-2 border-b border-hair grid grid-cols-3 gap-1 bg-slate-500/5 shrink-0">
+        <button onclick="switchInspectorTab('node')" id="insp-tab-node" class="py-1.5 px-2 rounded-md text-xs font-medium bg-indigo-600 text-white shadow-sm transition">
+          Node &amp; Wallet
+        </button>
+        <button onclick="switchInspectorTab('packet')" id="insp-tab-packet" class="py-1.5 px-2 rounded-md text-xs font-medium text-sec hover:text-pri transition">
+          TX Packet JSON
+        </button>
+        <button onclick="switchInspectorTab('ledger')" id="insp-tab-ledger" class="py-1.5 px-2 rounded-md text-xs font-medium text-sec hover:text-pri transition">
+          Ledger (<span id="ledger-count-pill">0</span>)
+        </button>
+      </div>
+
+      <!-- INSPECTOR VIEW 1: SELECTED NODE, DUAL WALLET & HARDWARE TEE STATE -->
+      <div id="insp-view-node" class="flex-1 overflow-y-auto p-4 space-y-4">
+        
+        <!-- Quick Node Selector Bar -->
+        <div>
+          <div class="text-[10px] font-mono-code uppercase tracking-wider text-sec font-semibold mb-1.5">Select Network Node</div>
+          <div class="grid grid-cols-3 gap-1.5" id="inspector-node-selector">
+            <!-- Populated by JS -->
+          </div>
+        </div>
+
+        <!-- Selected Node Telemetry Content -->
+        <div id="inspector-node-detail" class="space-y-4">
+          <!-- Populated dynamically by JS -->
+        </div>
+
+      </div>
+
+      <!-- INSPECTOR VIEW 2: CRYPTOGRAPHIC PACKET PAYLOAD & VERIFICATION PIPELINE -->
+      <div id="insp-view-packet" class="flex-1 overflow-y-auto p-4 space-y-4 hidden">
+        
+        <div class="flex items-center justify-between">
+          <div>
+            <div class="text-[10px] font-mono-code uppercase tracking-wider text-indigo-400 font-semibold">Section 4 · Protected Structure</div>
+            <h3 class="text-xs font-semibold text-pri mt-0.5">Cryptographically Bound Payload</h3>
+          </div>
+          <button onclick="copyPayloadJSON()" id="btn-copy-json" class="px-2.5 py-1 rounded-md surface-card surface-card-interactive text-[11px] font-mono-code text-sec hover:text-pri">
+            Copy JSON
+          </button>
+        </div>
+
+        <!-- Formatted JSON Code Block -->
+        <div class="rounded-xl p-3.5 bg-[#08090B] border border-slate-800 overflow-x-auto">
+          <pre id="inspector-json-pre" class="text-[11px] leading-relaxed font-mono-code text-slate-200"></pre>
+        </div>
+
+        <!-- 4-Stage Cryptographic Verification Pipeline -->
+        <div class="space-y-2">
+          <div class="text-[10px] font-mono-code uppercase tracking-wider text-sec font-semibold">Local Verification Pipeline</div>
+          <div id="inspector-verification-list" class="space-y-1.5">
+            <!-- Populated by JS -->
+          </div>
+        </div>
+
+        <!-- Architectural Distinction Callout -->
+        <div class="p-3 rounded-xl surface-card space-y-1 text-[11px]">
+          <div class="font-semibold text-pri">Signature vs. Encryption vs. Counter</div>
+          <p class="text-sec leading-relaxed">
+            <strong class="text-pri">AEAD Encryption</strong> protects payload confidentiality over Bluetooth. <strong class="text-pri">ECDSA Signatures</strong> bind sender, recipient, amount (poisha), and <code class="font-mono-code">time_epoch</code>. <strong class="text-pri">TEE Counters</strong> prevent backup rollback.
+          </p>
+        </div>
+
+      </div>
+
+      <!-- INSPECTOR VIEW 3: 3-STAGE RECONCILIATION LEDGER -->
+      <div id="insp-view-ledger" class="flex-1 overflow-y-auto p-4 space-y-4 hidden">
+        
+        <div>
+          <div class="text-[10px] font-mono-code uppercase tracking-wider text-emerald-400 font-semibold">Section 8 · Settlement Lifecycle</div>
+          <h3 class="text-xs font-semibold text-pri mt-0.5">Offline Acceptance &rarr; Server Settlement</h3>
+        </div>
+
+        <!-- 3-Tier State Legend -->
+        <div class="grid grid-cols-3 gap-1.5 text-[10px]">
+          <div class="p-2 rounded-lg surface-card border-l-2 border-l-amber-500">
+            <div class="font-semibold text-amber-400">Locally Accepted</div>
+            <div class="text-sec mt-0.5">Verified via BLE</div>
+          </div>
+          <div class="p-2 rounded-lg surface-card border-l-2 border-l-blue-500">
+            <div class="font-semibold text-blue-400">Pending Reconcil.</div>
+            <div class="text-sec mt-0.5">Witness at Server</div>
+          </div>
+          <div class="p-2 rounded-lg surface-card border-l-2 border-l-emerald-500">
+            <div class="font-semibold text-emerald-400">Settled</div>
+            <div class="text-sec mt-0.5">Finalized online</div>
+          </div>
+        </div>
+
+        <!-- Transactions List -->
+        <div id="inspector-ledger-list" class="space-y-2">
+          <!-- Populated by JS -->
+        </div>
+
+      </div>
+
+    </aside>
+
+  </div>
+
+  <!-- ==================== 3. COMPLETE PROTOCOL & 3D SIMULATION SCRIPT ==================== -->
+  <script>
+    /***************************************************************************
+     * 1. SYSTEM CONFIGURATION & STATE MODEL
+     ***************************************************************************/
+    const PROTOCOL_RULES = {
+      maxOfflineBalanceBDT: 1000,
+      maxSingleTxBDT: 300,
+      maxOfflineTxCount: 10,
+      leaseDurationHours: 24.0,
+      epochDurationSec: 30
+    };
+
+    const simState = {
+      theme: 'dark',
+      activeMode: 'scenario',
+      activeInspectorTab: 'node',
+      currentEpoch: 100,
+      epochRemainingSec: 30.0,
+      clockSpeed: 1, // 0 = paused, 1 = real-time
+      simClockSec: 16 * 3600, // 16:00:00 (4:00 PM)
+      dailyEpochStr: '2026-11-07',
+      dailyPeriodIdx: 1,
+      scenarioStepIdx: 0,
+      autoPlayTimer: null,
+      selectedNodeId: 'rahim',
+      banner: {
+        tag: 'PROTOCOL STATE · EPOCH 100',
+        timeTag: '16:00:00 · Offline Mode',
+        title: '4:00 PM — Daily Cryptographic Authorization Active',
+        desc: 'All registered devices follow the synchronized 30-second HMAC schedule. Rahim has allocated ৳1,000 to his hardware-protected offline wallet (৳4,000 remains online).',
+        statusColor: 'bg-indigo-500',
+        layers: [
+          'Layer 1: Daily Server Auth (Day 1)',
+          'Layer 3: 30s HMAC Schedule (E-100)',
+          'Layer 9: TEE Monotonic Counter #184'
+        ]
+      },
+      transactions: [],
+      serverState: {
+        settledCount: 0,
+        witnessReports: [],
+        flaggedForks: []
+      },
+      nodes: {
+        rahim: {
+          id: 'rahim',
+          name: 'Rahim',
+          shortRole: 'Sender · A',
+          role: 'Primary Payer (Person A)',
+          walletId: 'WALLET-A',
+          onlineBalanceBDT: 4000,
+          offlineBalanceBDT: 1000,
+          locallyAcceptedBDT: 0,
+          settledReceivedBDT: 0,
+          deviceCounter: 184,
+          offlineTxCount: 0,
+          online: false,
+          leaseHours: 24.0,
+          leaseValid: true,
+          hardwareEnclave: 'StrongBox TEE · Attested',
+          deviceSecretKd: 'Kd_A_9f82c104',
+          witnessLog: [],
+          position: { x: -4.4, y: 0.25, z: 1.4 },
+          accentHex: 0x6366f1
+        },
+        karim: {
+          id: 'karim',
+          name: 'Karim',
+          shortRole: 'Receiver · B',
+          role: 'Primary Payee (Person B)',
+          walletId: 'WALLET-B',
+          onlineBalanceBDT: 2500,
+          offlineBalanceBDT: 400,
+          locallyAcceptedBDT: 0,
+          settledReceivedBDT: 0,
+          deviceCounter: 92,
+          offlineTxCount: 0,
+          online: false,
+          leaseHours: 24.0,
+          leaseValid: true,
+          hardwareEnclave: 'StrongBox TEE · Attested',
+          deviceSecretKd: 'Kd_B_3e71a890',
+          witnessLog: [],
+          position: { x: 4.4, y: 0.25, z: 1.4 },
+          accentHex: 0x10b981
+        },
+        hasan: {
+          id: 'hasan',
+          name: 'Hasan',
+          shortRole: 'Peer / Witness · C',
+          role: 'Nearby Witness & Peer (Person C)',
+          walletId: 'WALLET-C',
+          onlineBalanceBDT: 3200,
+          offlineBalanceBDT: 600,
+          locallyAcceptedBDT: 0,
+          settledReceivedBDT: 0,
+          deviceCounter: 41,
+          offlineTxCount: 0,
+          online: false,
+          leaseHours: 24.0,
+          leaseValid: true,
+          hardwareEnclave: 'Secure Enclave · Attested',
+          deviceSecretKd: 'Kd_C_7c45d211',
+          witnessLog: [],
+          position: { x: 0.0, y: 0.25, z: 4.3 },
+          accentHex: 0x3b82f6
+        },
+        witnessD: {
+          id: 'witnessD',
+          name: 'Phone D',
+          shortRole: 'Witness · D',
+          role: 'Nearby BLE Witness Node D',
+          walletId: 'WALLET-D',
+          onlineBalanceBDT: 1800,
+          offlineBalanceBDT: 500,
+          locallyAcceptedBDT: 0,
+          settledReceivedBDT: 0,
+          deviceCounter: 19,
+          offlineTxCount: 0,
+          online: false,
+          leaseHours: 22.5,
+          leaseValid: true,
+          hardwareEnclave: 'TEE · Verified',
+          deviceSecretKd: 'Kd_D_5a19f008',
+          witnessLog: [],
+          position: { x: -5.2, y: 0.25, z: -2.3 },
+          accentHex: 0x64748b
+        },
+        witnessE: {
+          id: 'witnessE',
+          name: 'Phone E',
+          shortRole: 'Witness · E',
+          role: 'Nearby BLE Witness Node E',
+          walletId: 'WALLET-E',
+          onlineBalanceBDT: 2100,
+          offlineBalanceBDT: 750,
+          locallyAcceptedBDT: 0,
+          settledReceivedBDT: 0,
+          deviceCounter: 63,
+          offlineTxCount: 0,
+          online: false,
+          leaseHours: 23.0,
+          leaseValid: true,
+          hardwareEnclave: 'TEE · Verified',
+          deviceSecretKd: 'Kd_E_1d84e392',
+          witnessLog: [],
+          position: { x: 5.2, y: 0.25, z: -2.3 },
+          accentHex: 0x64748b
+        }
+      },
+      latestPayload: null,
+      latestChecks: []
+    };
+
+    // Deterministic HMAC-like Hex Generator
+    function deriveHMAC(secretKey, epochVal) {
+      const input = `${secretKey}::${epochVal}::${simState.dailyEpochStr}`;
+      let h1 = 0xdeadbeef ^ input.length;
+      let h2 = 0x41c6ce57 ^ input.length;
+      for (let i = 0; i < input.length; i++) {
+        const c = input.charCodeAt(i);
+        h1 = Math.imul(h1 ^ c, 2654435761);
+        h2 = Math.imul(h2 ^ c, 1597334677);
+      }
+      h1 = Math.imul(h1 ^ (h1 >>> 16), 2246822507) ^ Math.imul(h2 ^ (h2 >>> 13), 3266489909);
+      h2 = Math.imul(h2 ^ (h2 >>> 16), 2246822507) ^ Math.imul(h1 ^ (h1 >>> 13), 3266489909);
+      return '0x' + (h1 >>> 0).toString(16).padStart(8, '0') + (h2 >>> 0).toString(16).padStart(8, '0');
+    }
+
+    function formatClockTime(secTotal) {
+      const s = Math.floor(secTotal) % 86400;
+      const hh = String(Math.floor(s / 3600)).padStart(2, '0');
+      const mm = String(Math.floor((s % 3600) / 60)).padStart(2, '0');
+      const ss = String(Math.floor(s % 60)).padStart(2, '0');
+      return `${hh}:${mm}:${ss}`;
+    }
+
+    function initDefaultPayload() {
+      const kt = deriveHMAC(simState.nodes.rahim.deviceSecretKd, simState.currentEpoch);
+      simState.latestPayload = {
+        transaction_id: "TX-928374",
+        sender_wallet: "WALLET-A",
+        receiver_wallet: "WALLET-B",
+        amount: 30000,
+        currency: "BDT",
+        time_epoch: simState.currentEpoch,
+        daily_epoch: simState.dailyEpochStr,
+        device_counter: 184,
+        nonce: "8f3c1b90e4a27d11",
+        sender_signature: `ECDSA_P256(${kt.slice(2, 12)}...94a1)`,
+        encrypted_payload: "AES256_GCM(c4190ef83a21...)"
+      };
+      simState.latestChecks = [
+        { title: "Daily Authorization & 24h Lease", passed: true, detail: `Valid (${simState.dailyEpochStr} · 24.0h remaining)` },
+        { title: "30s Synchronized Epoch Window", passed: true, detail: `Epoch ${simState.currentEpoch} within [${simState.currentEpoch - 1}, ${simState.currentEpoch}, ${simState.currentEpoch + 1}]` },
+        { title: "Hardware Monotonic Counter (TEE)", passed: true, detail: "Counter #184 verified in Secure Enclave" },
+        { title: "ECDSA Signature & AEAD Binding", passed: true, detail: "Bound 30,000 poisha (৳300) + WALLET-B" }
+      ];
+    }
+
+    /***************************************************************************
+     * 2. GUIDED 7-STEP REAL-WORLD SCENARIO (SECTION 11 OF SPECIFICATION)
+     ***************************************************************************/
+    const SCENARIO_STEPS = [
+      {
+        step: 1,
+        time: "4:00:00 PM",
+        epoch: 100,
+        title: "Daily Authorization Becomes Active",
+        summary: "New daily cryptographic schedule starts at 4:00 PM. Rahim has ৳1,000 offline / ৳4,000 online.",
+        detail: "At 4:00 PM, the previous day's authorization expires and Day 1 credentials become active across all pre-synchronized phones. Rahim, Karim, and Hasan operate offline on Epoch 100.",
+        layers: ["Layer 1: Daily 4 PM Rotation", "Layer 3: Synchronized Epoch 100", "Layer 6: ৳1,000 Offline Allocation"],
+        action: () => {
+          simState.simClockSec = 16 * 3600;
+          simState.currentEpoch = 100;
+          simState.epochRemainingSec = 30;
+          Object.values(simState.nodes).forEach(n => {
+            n.online = false;
+            n.leaseValid = true;
+            n.leaseHours = 24.0;
+          });
+          spawnFloorWave({ x: 0, y: 0.05, z: 0.5 }, 0x6366f1, 12.0);
+        }
+      },
+      {
+        step: 2,
+        time: "4:15:05 PM",
+        epoch: 100,
+        title: "Rahim Pays Karim ৳300 via Bluetooth",
+        summary: "Rahim signs TX-100301 (30,000 poisha) offline. Rahim's offline balance drops ৳1,000 → ৳700.",
+        detail: "Neither phone has internet. Rahim's wallet increments its TEE monotonic counter (#184 → #185), signs the ৳300 payload under Epoch 100, and sends it over BLE to Karim, who validates and marks it Locally Accepted.",
+        layers: ["Layer 6: AEAD + ECDSA Signature", "Layer 9: TEE Counter #185", "Layer 10: Local BLE Verification"],
+        action: () => {
+          simState.simClockSec = 16 * 3600 + 15 * 60 + 5;
+          simState.currentEpoch = 100;
+          simState.epochRemainingSec = 25;
+          executeOfflineTransfer('rahim', 'karim', 300, 'TX-100301', false);
+        }
+      },
+      {
+        step: 3,
+        time: "4:15:08 PM",
+        epoch: 100,
+        title: "Nearby Phones Capture Witness Evidence",
+        summary: "Hasan (Phone C), Phone D & Phone E receive signed announcement for TX-100301.",
+        detail: "Nearby registered devices within Bluetooth range receive a compact, digitally signed transaction announcement containing TX-100301's hash and sequence counter #185, without exposing private wallet balances.",
+        layers: ["Layer 11: Opportunistic BLE Witness Mesh", "Sequence #185 Hash Logged", "Privacy-Preserving Evidence"],
+        action: () => {
+          simState.simClockSec = 16 * 3600 + 15 * 60 + 8;
+          const tx = simState.transactions.find(t => t.transaction_id === 'TX-100301') || {
+            transaction_id: 'TX-100301',
+            sender_wallet: 'WALLET-A',
+            receiver_wallet: 'WALLET-B',
+            amount: 30000,
+            time_epoch: 100,
+            device_counter: 185,
+            txHash: deriveHMAC('TX-100301', 185)
+          };
+          broadcastWitnessAnnouncement('rahim', 'karim', tx);
+        }
+      },
+      {
+        step: 4,
+        time: "4:15:30 PM",
+        epoch: 101,
+        title: "30-Second Cryptographic Epoch Rotates",
+        summary: "Global schedule rotates Epoch 100 → Epoch 101. Expired credentials cannot authorize new TXs.",
+        detail: "Every 30 seconds, the active time-dependent credential Kt = HMAC(Kd, Epoch) rotates simultaneously on all devices. Once outside the tolerance window, older captured packets cannot be replayed.",
+        layers: ["Layer 3: 30s HMAC Key Rotation", "Replay Window Advanced", "Freshness Guaranteed"],
+        action: () => {
+          simState.simClockSec = 16 * 3600 + 15 * 60 + 30;
+          simState.currentEpoch = 101;
+          simState.epochRemainingSec = 30;
+          spawnFloorWave({ x: 0, y: 0.05, z: 0.5 }, 0x3b82f6, 13.0);
+        }
+      },
+      {
+        step: 5,
+        time: "4:20:10 PM",
+        epoch: 110,
+        title: "Rahim Pays Hasan ৳200 Offline",
+        summary: "Rahim sends ৳200 (20,000 poisha) to Hasan under Epoch 110. Rahim's offline wallet is now ৳500.",
+        detail: "Under Epoch 110, Rahim creates TX-110202 for ৳200 to Hasan. Rahim's TEE counter advances #185 → #186, his offline balance decreases from ৳700 to ৳500, and nearby phones witness the announcement.",
+        layers: ["Layer 3: Epoch 110 Credential", "Layer 9: TEE Counter #186", "Layer 13: ৳500 Remaining Offline Cap"],
+        action: () => {
+          simState.simClockSec = 16 * 3600 + 20 * 60 + 10;
+          simState.currentEpoch = 110;
+          simState.epochRemainingSec = 20;
+          executeOfflineTransfer('rahim', 'hasan', 200, 'TX-110202', true);
+        }
+      },
+      {
+        step: 6,
+        time: "5:00:00 PM",
+        epoch: 190,
+        title: "Hasan Connects to Internet (Witness Upload)",
+        summary: "Hasan regains mobile data first and uploads witness hash for TX-100301 + his own TX-110202.",
+        detail: "Even though Rahim and Karim are still offline, Hasan connects to mobile data at 5:00 PM. Hasan's phone automatically uploads the witness evidence collected from Rahim→Karim (TX-100301) and settles TX-110202.",
+        layers: ["Layer 8: Opportunistic Witness Uplink", "TX-100301 → Pending Reconciliation", "24h Lease Renewed"],
+        action: () => {
+          simState.simClockSec = 17 * 3600;
+          simState.currentEpoch = 190;
+          setNodeConnectivity('hasan', true);
+        }
+      },
+      {
+        step: 7,
+        time: "5:05:00 PM",
+        epoch: 200,
+        title: "Karim & Rahim Sync — Server Settles Ledger",
+        summary: "Karim uploads original receipt for TX-100301. Central Server cross-verifies witness hashes & settles.",
+        detail: "At 5:05 PM, Karim and Rahim connect to the internet. The Central Server compares Karim's signed payment receipt against Hasan's earlier witness hash, confirms zero sequence conflicts, and transitions all payments to Settled.",
+        layers: ["Layer 12: Central Server Reconciliation", "Witness Hash Matched", "Ledger Finalized (Settled)"],
+        action: () => {
+          simState.simClockSec = 17 * 3600 + 5 * 60;
+          simState.currentEpoch = 200;
+          setNodeConnectivity('karim', true);
+          setTimeout(() => {
+            setNodeConnectivity('rahim', true);
+          }, 750);
+        }
+      }
+    ];
+
+    /***************************************************************************
+     * 3. CORE PROTOCOL TRANSACTION & SYNCHRONIZATION ENGINE
+     ***************************************************************************/
+    function executeOfflineTransfer(senderId, receiverId, amountBDT, forcedTxId = null, broadcastToWitnesses = true) {
+      const sender = simState.nodes[senderId];
+      const receiver = simState.nodes[receiverId];
+      if (!sender || !receiver || senderId === receiverId) return;
+
+      // Guardrail 1: Check 24-Hour Authorization Lease
+      if (!sender.leaseValid || sender.leaseHours <= 0) {
+        spawnNodeShockwave(sender.position, 0xef4444);
+        updateContextBanner(
+          `AUTHORIZATION LEASE EXPIRED · ${sender.walletId}`,
+          `${sender.name}'s 24-Hour Offline Lease Has Expired`,
+          `Mandatory daily synchronization is required at least once every 24 hours. ${sender.name} cannot initiate new offline payments until re-authenticated with the Central Server.`,
+          'bg-red-500',
+          ['Layer 1: 24h Lease Expired', 'Offline Signing Locked', 'Requires Server Sync']
+        );
+        simState.latestChecks = [
+          { title: "Daily Authorization & 24h Lease", passed: false, detail: "BLOCKED: 24-hour lease expired (0.0h left)" },
+          { title: "30s Synchronized Epoch Window", passed: true, detail: `Epoch ${simState.currentEpoch}` },
+          { title: "Hardware Monotonic Counter (TEE)", passed: true, detail: `Counter #${sender.deviceCounter}` }
+        ];
+        switchInspectorTab('packet');
+        renderAllUI();
+        return;
+      }
+
+      // Guardrail 2: Single-Transaction Policy Limit (৳300 default)
+      const enforceCapBox = document.getElementById('sandbox-enforce-cap');
+      const enforceCap = enforceCapBox ? enforceCapBox.checked : true;
+      if (enforceCap && amountBDT > PROTOCOL_RULES.maxSingleTxBDT) {
+        spawnNodeShockwave(sender.position, 0xf59e0b);
+        updateContextBanner(
+          `POLICY GUARDRAIL TRIGGERED · SECTION 6`,
+          `Payment of ৳${amountBDT} Exceeds ৳${PROTOCOL_RULES.maxSingleTxBDT} Single-Transaction Limit`,
+          `To limit potential exposure if an offline device is compromised, the server policy restricts single offline transactions to ৳${PROTOCOL_RULES.maxSingleTxBDT}. (Uncheck policy cap in Sandbox to test ৳500).`,
+          'bg-amber-500',
+          ['Layer 13: Single-TX Cap (Max ৳300)', 'Rejected Locally by Wallet Policy']
+        );
+        simState.latestChecks = [
+          { title: "Single-Transaction Policy Limit", passed: false, detail: `BLOCKED: ৳${amountBDT} exceeds ৳${PROTOCOL_RULES.maxSingleTxBDT} cap` },
+          { title: "Offline Wallet Available Balance", passed: sender.offlineBalanceBDT >= amountBDT, detail: `Available: ৳${sender.offlineBalanceBDT}` }
+        ];
+        switchInspectorTab('packet');
+        renderAllUI();
+        return;
+      }
+
+      // Guardrail 3: Hardware Offline Wallet Balance
+      if (sender.offlineBalanceBDT < amountBDT) {
+        spawnNodeShockwave(sender.position, 0xef4444);
+        updateContextBanner(
+          `INSUFFICIENT OFFLINE FUNDS · ${sender.walletId}`,
+          `${sender.name} Only Has ৳${sender.offlineBalanceBDT} Remaining in Offline Allocation`,
+          `Even though ${sender.name} has ৳${sender.onlineBalanceBDT} in their online account, only ৳${sender.offlineBalanceBDT} remains in the hardware-protected offline wallet.`,
+          'bg-red-500',
+          ['Layer 9: Hardware Balance Guard', 'Requires Online Re-Allocation']
+        );
+        return;
+      }
+
+      // Increment Hardware TEE Monotonic Counter & Deduct Offline Balance
+      sender.deviceCounter += 1;
+      sender.offlineTxCount += 1;
+      sender.offlineBalanceBDT -= amountBDT;
+
+      const txId = forcedTxId || `TX-${simState.currentEpoch}${Math.floor(100 + Math.random() * 899)}`;
+      const amountPoisha = amountBDT * 100;
+      const nonceHex = Math.random().toString(16).substring(2, 10) + Math.random().toString(16).substring(2, 10);
+      const ktHash = deriveHMAC(sender.deviceSecretKd, simState.currentEpoch);
+      const txHash = deriveHMAC(`${txId}:${amountPoisha}:${sender.deviceCounter}`, ktHash);
+
+      const payload = {
+        transaction_id: txId,
+        sender_wallet: sender.walletId,
+        receiver_wallet: receiver.walletId,
+        amount: amountPoisha,
+        currency: "BDT",
+        time_epoch: simState.currentEpoch,
+        daily_epoch: simState.dailyEpochStr,
+        device_counter: sender.deviceCounter,
+        nonce: nonceHex,
+        sender_signature: `ECDSA_${sender.walletId.slice(-1)}_${txHash.slice(2, 14)}`,
+        encrypted_payload: `AEAD_GCM_${ktHash.slice(2, 10)}_${btoa(`${txId}:${amountPoisha}`).slice(0, 10)}`
+      };
+
+      const txRecord = {
+        ...payload,
+        senderId,
+        receiverId,
+        senderName: sender.name,
+        receiverName: receiver.name,
+        amountBDT,
+        txHash,
+        timestamp: formatClockTime(simState.simClockSec),
+        status: 'Locally Accepted',
+        witnesses: [],
+        senderSynced: false,
+        receiverSynced: false
+      };
+
+      simState.transactions.unshift(txRecord);
+      simState.latestPayload = payload;
+      simState.latestChecks = [
+        { title: "Daily Authorization & 24h Lease", passed: true, detail: `Valid (${sender.leaseHours.toFixed(1)}h left · ${simState.dailyEpochStr})` },
+        { title: "30s Synchronized Epoch Window", passed: true, detail: `Epoch ${simState.currentEpoch} valid in [${simState.currentEpoch - 1}, ${simState.currentEpoch}, ${simState.currentEpoch + 1}]` },
+        { title: "Hardware Monotonic Counter (TEE)", passed: true, detail: `Strictly incremented #${sender.deviceCounter - 1} → #${sender.deviceCounter}` },
+        { title: "ECDSA Signature & AEAD Binding", passed: true, detail: `Verified ${amountPoisha.toLocaleString()} poisha (৳${amountBDT})` }
+      ];
+
+      updateContextBanner(
+        `OFFLINE BLE PAYMENT · ${txId}`,
+        `${sender.name} Pays ${receiver.name} ৳${amountBDT} (${amountPoisha.toLocaleString()} poisha) Offline`,
+        `Signed with ${sender.name}'s device key under Epoch ${simState.currentEpoch} and TEE Counter #${sender.deviceCounter}. ${sender.name}'s offline balance is now ৳${sender.offlineBalanceBDT}.`,
+        'bg-indigo-500',
+        [`Epoch ${simState.currentEpoch} HMAC Valid`, `TEE Counter #${sender.deviceCounter}`, `AEAD + ECDSA Verified`]
+      );
+
+      // Animate 3D BLE Payment Arc with live floating callout
+      spawn3DPaymentArc(
+        sender.position,
+        receiver.position,
+        0x6366f1,
+        `৳${amountBDT} · E-${simState.currentEpoch} · #${sender.deviceCounter}`,
+        () => {
+          receiver.locallyAcceptedBDT += amountBDT;
+          spawnFloorWave(receiver.position, 0x10b981, 2.8);
+
+          // Return signed receipt arc
+          spawn3DPaymentArc(receiver.position, sender.position, 0x10b981, `Signed Receipt · ${txId}`, () => {
+            renderAllUI();
+          }, 0.55);
+
+          if (sender.online) syncNodeToServer(senderId);
+          if (receiver.online) syncNodeToServer(receiverId);
+          renderAllUI();
+        }
+      );
+
+      if (broadcastToWitnesses) {
+        setTimeout(() => {
+          broadcastWitnessAnnouncement(senderId, receiverId, txRecord);
+        }, 420);
+      }
+
+      renderAllUI();
+    }
+
+    // Broadcast compact signed transaction announcement to nearby witness phones
+    function broadcastWitnessAnnouncement(senderId, receiverId, txRecord) {
+      const sender = simState.nodes[senderId];
+      if (!sender) return;
+
+      // Expanding radial BLE witness wave on floor
+      spawnFloorWave(sender.position, 0xf59e0b, 11.5);
+
+      const witnessIds = Object.keys(simState.nodes).filter(id => id !== senderId && id !== receiverId);
+      witnessIds.forEach((wId, idx) => {
+        const wNode = simState.nodes[wId];
+        // Subtle dashed or secondary signal arc from sender to witness
+        spawnWitnessSignalArc(sender.position, wNode.position, 0xf59e0b, () => {
+          const ev = {
+            txId: txRecord.transaction_id,
+            txHash: txRecord.txHash || deriveHMAC(txRecord.transaction_id, txRecord.device_counter),
+            senderWallet: txRecord.sender_wallet,
+            counter: txRecord.device_counter,
+            epoch: txRecord.time_epoch,
+            time: formatClockTime(simState.simClockSec)
+          };
+          if (!wNode.witnessLog.some(x => x.txId === ev.txId && x.txHash === ev.txHash)) {
+            wNode.witnessLog.unshift(ev);
+          }
+          if (txRecord.witnesses && !txRecord.witnesses.includes(wNode.name)) {
+            txRecord.witnesses.push(wNode.name);
+          }
+          spawnFloorWave(wNode.position, 0xf59e0b, 2.2);
+          if (wNode.online) syncNodeToServer(wId);
+          renderAllUI();
+        }, 0.5 + idx * 0.12);
+      });
+    }
+
+    // Toggle device internet connection & trigger opportunistic server reconciliation
+    function setNodeConnectivity(nodeId, isOnline) {
+      const node = simState.nodes[nodeId];
+      if (!node) return;
+      node.online = isOnline;
+      if (isOnline) {
+        node.leaseHours = 24.0;
+        node.leaseValid = true;
+        syncNodeToServer(nodeId);
+      } else {
+        renderAllUI();
+      }
+    }
+
+    function toggleNodeConnectivity(nodeId) {
+      const node = simState.nodes[nodeId];
+      if (!node) return;
+      setNodeConnectivity(nodeId, !node.online);
+    }
+
+    function syncAllNodesOnline() {
+      Object.keys(simState.nodes).forEach((id, i) => {
+        setTimeout(() => setNodeConnectivity(id, true), i * 220);
+      });
+    }
+
+    function syncNodeToServer(nodeId) {
+      const node = simState.nodes[nodeId];
+      if (!node || !node.online) return;
+
+      // Spawn 3D Uplink Beam from Phone to Elevated Central Server
+      spawnServerUplinkBeam(node.position, { x: 0, y: 5.8, z: -6.2 }, 0x10b981);
+
+      let witnessUploadCount = 0;
+      let newlySettledCount = 0;
+
+      // 1. Upload stored witness announcements
+      node.witnessLog.forEach(ev => {
+        // Check if another witness report has the SAME senderWallet & counter but DIFFERENT txHash
+        const conflict = simState.serverState.witnessReports.find(
+          r => r.senderWallet === ev.senderWallet && r.counter === ev.counter && r.txHash !== ev.txHash
+        );
+        if (conflict) {
+          simState.serverState.flaggedForks.push({
+            wallet: ev.senderWallet,
+            counter: ev.counter,
+            tx1: conflict.txId,
+            tx2: ev.txId
+          });
+        }
+        if (!simState.serverState.witnessReports.some(r => r.txId === ev.txId && r.reporter === node.name)) {
+          simState.serverState.witnessReports.push({ ...ev, reporter: node.name });
+          witnessUploadCount++;
+        }
+
+        const matchedTx = simState.transactions.find(t => t.transaction_id === ev.txId);
+        if (matchedTx && matchedTx.status === 'Locally Accepted') {
+          matchedTx.status = 'Pending Reconciliation';
+        }
+      });
+
+      // 2. Upload direct transaction receipts
+      simState.transactions.forEach(tx => {
+        if (tx.status.startsWith('Rejected') || tx.status === 'Quarantined (Fork)') return;
+
+        if (tx.senderId === nodeId) tx.senderSynced = true;
+        if (tx.receiverId === nodeId) tx.receiverSynced = true;
+
+        const corroboratedByWitness = simState.serverState.witnessReports.some(r => r.txId === tx.transaction_id);
+
+        if ((tx.receiverSynced && (tx.senderSynced || corroboratedByWitness)) || (tx.senderSynced && corroboratedByWitness)) {
+          if (tx.status !== 'Settled') {
+            tx.status = 'Settled';
+            simState.serverState.settledCount += 1;
+            newlySettledCount += 1;
+
+            const recNode = simState.nodes[tx.receiverId];
+            if (recNode) {
+              recNode.locallyAcceptedBDT = Math.max(0, recNode.locallyAcceptedBDT - tx.amountBDT);
+              recNode.settledReceivedBDT += tx.amountBDT;
+              recNode.onlineBalanceBDT += tx.amountBDT;
+            }
+          }
+        } else if (tx.senderSynced || tx.receiverSynced) {
+          if (tx.status === 'Locally Accepted') {
+            tx.status = 'Pending Reconciliation';
+          }
+        }
+      });
+
+      updateContextBanner(
+        `OPPORTUNISTIC SERVER SYNC · ${node.name.toUpperCase()}`,
+        newlySettledCount > 0
+          ? `${node.name} Synchronized with Server — ${newlySettledCount} Transaction(s) Settled`
+          : `${node.name} Connected to Internet — Uploaded ${witnessUploadCount} Witness Evidence Record(s)`,
+        `Whenever any participating phone regains connectivity, it uploads pending receipts and witness hashes. The Central Server reconciles transaction states and renews ${node.name}'s 24-hour authorization lease.`,
+        'bg-emerald-500',
+        ['Layer 8: Automatic Internet Sync', 'Layer 12: Server Reconciliation', '24h Lease Renewed']
+      );
+
+      renderAllUI();
+    }
+
+    /***************************************************************************
+     * 4. THREAT & ATTACK LAB SIMULATIONS (SECTION 5 & 7)
+     ***************************************************************************/
+    // Attack A: Replay an old captured transaction packet after Epoch expires
+    function simulateReplayAttack() {
+      if (simState.currentEpoch < 102) {
+        simState.currentEpoch = 102;
+        simState.epochRemainingSec = 26;
+      }
+      const rahim = simState.nodes.rahim;
+      const karim = simState.nodes.karim;
+
+      const replayPayload = {
+        transaction_id: "TX-100301-REPLAY",
+        sender_wallet: "WALLET-A",
+        receiver_wallet: "WALLET-B",
+        amount: 30000,
+        currency: "BDT",
+        time_epoch: 100, // Expired Epoch!
+        daily_epoch: simState.dailyEpochStr,
+        device_counter: 185,
+        nonce: "8f3c1b90e4a27d11",
+        sender_signature: "ECDSA_CAPTURED_PACKET_E100",
+        encrypted_payload: "AEAD_CAPTURED_CIPHERTEXT"
+      };
+
+      simState.latestPayload = replayPayload;
+      simState.latestChecks = [
+        { title: "30s Synchronized Epoch Window", passed: false, detail: `REJECTED: Packet Epoch 100 is expired (Active Window: [${simState.currentEpoch - 1}..${simState.currentEpoch + 1}])` },
+        { title: "Unique Transaction ID & Nonce", passed: false, detail: "REJECTED: Duplicate transaction_id & nonce detected" },
+        { title: "Hardware Monotonic Counter (TEE)", passed: false, detail: "REJECTED: Counter #185 already spent" }
+      ];
+
+      simState.transactions.unshift({
+        ...replayPayload,
+        senderId: 'rahim',
+        receiverId: 'karim',
+        senderName: 'Attacker (Replay A)',
+        receiverName: 'Karim',
+        amountBDT: 300,
+        timestamp: formatClockTime(simState.simClockSec),
+        status: 'Rejected (Replay)',
+        witnesses: ['Blocked by Epoch Window']
+      });
+
+      spawn3DPaymentArc(
+        rahim.position,
+        karim.position,
+        0xef4444,
+        `REPLAY · Epoch 100 (Expired)`,
+        () => {
+          spawnNodeShockwave(karim.position, 0xef4444);
+          updateContextBanner(
+            `ATTACK A BLOCKED · EXPIRED EPOCH REPLAY`,
+            `Karim's Phone Rejected Replayed Epoch 100 Packet`,
+            `The attacker re-transmitted a captured ৳300 packet from Epoch 100 during Epoch ${simState.currentEpoch}. Because Epoch 100 is outside the permitted [${simState.currentEpoch - 1}, ${simState.currentEpoch}, ${simState.currentEpoch + 1}] window, Karim's device rejected it locally.`,
+            'bg-red-500',
+            ['Layer 3: Time Epoch Expired', 'Layer 8: Replay Nonce Rejected', 'Zero Balance Impact']
+          );
+          switchInspectorTab('packet');
+          renderAllUI();
+        }
+      );
+    }
+
+    // Attack B1: Restore old wallet backup within the same 30-second epoch (TEE Monotonic Counter defense)
+    function simulateBackupRollbackTEE() {
+      const rahim = simState.nodes.rahim;
+      spawnNodeShockwave(rahim.position, 0xf59e0b);
+
+      const rollbackPayload = {
+        transaction_id: `TX-${simState.currentEpoch}-ROLLBACK`,
+        sender_wallet: "WALLET-A (Restored Backup)",
+        receiver_wallet: "WALLET-B",
+        amount: 30000,
+        currency: "BDT",
+        time_epoch: simState.currentEpoch, // Same 30-second epoch!
+        daily_epoch: simState.dailyEpochStr,
+        device_counter: rahim.deviceCounter, // Attacker tries to reuse counter after restoring backup!
+        nonce: "badc0ffee0192837",
+        sender_signature: "TEE_ENCLAVE_SIGNING_ABORTED",
+        encrypted_payload: "HARDWARE_ROLLBACK_PROTECTION_TRIPPED"
+      };
+
+      simState.latestPayload = rollbackPayload;
+      simState.latestChecks = [
+        { title: "30s Synchronized Epoch Window", passed: true, detail: `Epoch ${simState.currentEpoch} is still active (attack occurred within 30s)` },
+        { title: "Hardware Monotonic Counter (TEE/SE)", passed: false, detail: `BLOCKED: Restored app state requested Counter #${rahim.deviceCounter - 1}, but TEE hardware register is at #${rahim.deviceCounter}!` },
+        { title: "Rollback-Resistant Offline Balance", passed: false, detail: "BLOCKED: Hardware enclave refused to restore spent ৳300" }
+      ];
+
+      simState.transactions.unshift({
+        ...rollbackPayload,
+        senderId: 'rahim',
+        receiverId: 'karim',
+        senderName: 'Rahim (Backup Restore)',
+        receiverName: 'Karim',
+        amountBDT: 300,
+        timestamp: formatClockTime(simState.simClockSec),
+        status: 'Rejected (Rollback)',
+        witnesses: ['Blocked by Hardware TEE']
+      });
+
+      updateContextBanner(
+        `ATTACK B1 BLOCKED · WALLET BACKUP ROLLBACK`,
+        `Hardware Monotonic Counter Prevented Same-Epoch Balance Restore`,
+        `Restoring an application backup within the same 30-second epoch (${simState.currentEpoch}) cannot bypass the Hardware Secure Enclave (TEE). The hardware monotonic counter (#${rahim.deviceCounter}) detected the state rollback and refused to sign.`,
+        'bg-amber-500',
+        ['Layer 9: Hardware-Backed Spending State', `TEE Counter #${rahim.deviceCounter} Enforced`, 'Rollback Defeated']
+      );
+
+      switchInspectorTab('packet');
+      renderAllUI();
+    }
+
+    // Attack B2: Split-Brain Conflicting Sequence Double-Spend caught by Nearby Witnesses & Server
+    function simulateWitnessConflictAttack() {
+      const rahim = simState.nodes.rahim;
+      const karim = simState.nodes.karim;
+      const hasan = simState.nodes.hasan;
+
+      const conflictCounter = rahim.deviceCounter + 1;
+      rahim.deviceCounter = conflictCounter;
+
+      const forkTxA = {
+        transaction_id: `TX-FORK-${conflictCounter}A`,
+        sender_wallet: "WALLET-A",
+        receiver_wallet: "WALLET-B",
+        amount: 30000,
+        currency: "BDT",
+        time_epoch: simState.currentEpoch,
+        daily_epoch: simState.dailyEpochStr,
+        device_counter: conflictCounter,
+        nonce: "fork1111aaaa9999",
+        sender_signature: `ECDSA_FORK_A_#${conflictCounter}`,
+        encrypted_payload: "AEAD_FORK_PAYLOAD_KARIM",
+        senderId: 'rahim',
+        receiverId: 'karim',
+        senderName: 'Rahim (Fork A)',
+        receiverName: 'Karim',
+        amountBDT: 300,
+        txHash: "0x9911aaaa_FORK_HASH_A",
+        timestamp: formatClockTime(simState.simClockSec),
+        status: 'Quarantined (Fork)',
+        witnesses: ['Phone D', 'Hasan']
+      };
+
+      const forkTxB = {
+        transaction_id: `TX-FORK-${conflictCounter}B`,
+        sender_wallet: "WALLET-A",
+        receiver_wallet: "WALLET-C",
+        amount: 30000,
+        currency: "BDT",
+        time_epoch: simState.currentEpoch,
+        daily_epoch: simState.dailyEpochStr,
+        device_counter: conflictCounter, // Reused counter!
+        nonce: "fork2222bbbb8888",
+        sender_signature: `ECDSA_FORK_B_#${conflictCounter}`,
+        encrypted_payload: "AEAD_FORK_PAYLOAD_HASAN",
+        senderId: 'rahim',
+        receiverId: 'hasan',
+        senderName: 'Rahim (Fork B)',
+        receiverName: 'Hasan',
+        amountBDT: 300,
+        txHash: "0x8822bbbb_FORK_HASH_B",
+        timestamp: formatClockTime(simState.simClockSec),
+        status: 'Quarantined (Fork)',
+        witnesses: ['Phone E', 'Hasan']
+      };
+
+      simState.transactions.unshift(forkTxB, forkTxA);
+      simState.latestPayload = forkTxB;
+      simState.latestChecks = [
+        { title: "Nearby Witness Sequence Inspection", passed: false, detail: `CONFLICT: WALLET-A announced two distinct hashes with same device_counter #${conflictCounter}` },
+        { title: "Opportunistic Mesh Fraud Evidence", passed: false, detail: "Witnesses Hasan, D & E uploaded conflicting signed evidence to Server" },
+        { title: "Central Server Quarantine & Revocation", passed: false, detail: "WALLET-A offline lease revoked; conflicting TXs quarantined" }
+      ];
+
+      spawn3DPaymentArc(rahim.position, karim.position, 0xef4444, `FORK A · #${conflictCounter}`, null, 0.85);
+      spawn3DPaymentArc(rahim.position, hasan.position, 0xef4444, `FORK B · #${conflictCounter}`, null, 0.85);
+      spawnFloorWave(rahim.position, 0xef4444, 11.0);
+
+      setTimeout(() => {
+        spawnServerUplinkBeam(simState.nodes.witnessD.position, { x: 0, y: 5.8, z: -6.2 }, 0xef4444);
+        spawnServerUplinkBeam(simState.nodes.witnessE.position, { x: 0, y: 5.8, z: -6.2 }, 0xef4444);
+        rahim.leaseValid = false;
+        rahim.leaseHours = 0;
+
+        updateContextBanner(
+          `ATTACK B2 DETECTED · WITNESS MESH CAUGHT DOUBLE-SPEND FORK`,
+          `Nearby Witnesses & Server Flagged Conflicting Counter #${conflictCounter} from WALLET-A`,
+          `A compromised device forced two separate payments reusing Counter #${conflictCounter}. Nearby witness phones captured both signed announcements and uploaded them to the Central Server, which quarantined the transactions and revoked Rahim's device lease.`,
+          'bg-red-500',
+          ['Layer 11: Witness Conflict Evidence', 'Layer 12: Server Fork Detection', 'Device Lease Revoked']
+        );
+        switchInspectorTab('ledger');
+        renderAllUI();
+      }, 650);
+    }
+
+    function triggerDaily4PMRotation() {
+      simState.dailyPeriodIdx += 1;
+      const dayNum = 6 + simState.dailyPeriodIdx;
+      simState.dailyEpochStr = `2026-11-${String(dayNum).padStart(2, '0')}`;
+      simState.simClockSec = 16 * 3600;
+      simState.currentEpoch += 100;
+      simState.epochRemainingSec = 30;
+
+      Object.values(simState.nodes).forEach(n => {
+        n.deviceSecretKd = `Kd_${n.walletId.slice(-1)}_Day${simState.dailyPeriodIdx}`;
+      });
+
+      spawnFloorWave({ x: 0, y: 0.05, z: 0.5 }, 0x6366f1, 14.0);
+      updateContextBanner(
+        `4:00 PM DAILY CREDENTIAL ROTATION · DAY ${simState.dailyPeriodIdx}`,
+        `Previous Daily Key (Kd) Expired — Transitioned to ${simState.dailyEpochStr}`,
+        `At 4:00 PM every day, previous daily credentials expire across the network and pre-distributed Day ${simState.dailyPeriodIdx} secrets become active.`,
+        'bg-indigo-500',
+        [`Layer 4: Daily 4 PM Rotation (Day ${simState.dailyPeriodIdx})`, `Active Epoch ${simState.currentEpoch}`]
+      );
+      renderAllUI();
+    }
+
+    function expireSelectedNodeLease() {
+      const rahim = simState.nodes.rahim;
+      rahim.leaseHours = 0;
+      rahim.leaseValid = false;
+      rahim.online = false;
+      spawnNodeShockwave(rahim.position, 0xf59e0b);
+      updateContextBanner(
+        `24-HOUR LEASE EXPIRED · WALLET-A`,
+        `Rahim's Phone Exceeded 24 Hours Without Server Synchronization`,
+        `Offline payments are now disabled on Rahim's device until it reconnects to the Central Server to verify device integrity and renew its 24-hour authorization lease.`,
+        'bg-amber-500',
+        ['Layer 9: Mandatory 24h Sync Lease', 'Offline Spending Disabled']
+      );
+      renderAllUI();
+    }
+
+    /***************************************************************************
+     * 5. THREE.JS 3D ARCHITECTURAL SCENE & STUDIO LIGHTING
+     ***************************************************************************/
+    let scene, camera, renderer, stageContainer;
+    let gridHelper, floorPlane, serverGroup, serverRings = [];
+    const nodeMeshes = {};
+    const active3DEffects = [];
+
+    const camOrbit = {
+      isDragging: false,
+      prevX: 0,
+      prevY: 0,
+      theta: 0.0,
+      phi: 1.04,
+      radius: 15.8,
+      target: new THREE.Vector3(0, 1.1, 0.4),
+      desiredTheta: 0.0,
+      desiredPhi: 1.04,
+      desiredRadius: 15.8,
+      desiredTarget: new THREE.Vector3(0, 1.1, 0.4)
+    };
+
+    function initThreeStage() {
+      stageContainer = document.getElementById('stage-container');
+      const canvasEl = document.getElementById('canvas-container');
+
+      const w = stageContainer.clientWidth;
+      const h = stageContainer.clientHeight;
+
+      scene = new THREE.Scene();
+      scene.background = new THREE.Color(0x0B0C0E);
+      scene.fog = new THREE.FogExp2(0x0B0C0E, 0.018);
+
+      camera = new THREE.PerspectiveCamera(42, w / h, 0.1, 150);
+      renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: 'high-performance' });
+      renderer.setSize(w, h);
+      renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+      canvasEl.appendChild(renderer.domElement);
+
+      // Studio Architectural Lighting
+      const ambient = new THREE.AmbientLight(0xffffff, 0.75);
+      scene.add(ambient);
+
+      const keyLight = new THREE.DirectionalLight(0xe2e8f0, 0.9);
+      keyLight.position.set(12, 22, 14);
+      scene.add(keyLight);
+
+      const rimLight = new THREE.PointLight(0x6366f1, 1.2, 28);
+      rimLight.position.set(0, 7.0, -6.2);
+      scene.add(rimLight);
+
+      buildStudioFloor();
+      buildCentralServerStructure();
+      Object.values(simState.nodes).forEach(n => buildSmartphoneNode(n));
+      buildTopologyLinks();
+
+      setupStagePointerEvents(renderer.domElement);
+      window.addEventListener('resize', handleStageResize);
+    }
+
+    function buildStudioFloor() {
+      gridHelper = new THREE.GridHelper(32, 32, 0x1e293b, 0x141820);
+      gridHelper.position.y = -0.01;
+      scene.add(gridHelper);
+
+      // Subtle BLE Proximity Ring
+      const bleZoneGeo = new THREE.RingGeometry(6.3, 6.38, 96);
+      const bleZoneMat = new THREE.MeshBasicMaterial({
+        color: 0x475569,
+        side: THREE.DoubleSide,
+        transparent: true,
+        opacity: 0.35
+      });
+      const bleZone = new THREE.Mesh(bleZoneGeo, bleZoneMat);
+      bleZone.rotation.x = -Math.PI / 2;
+      bleZone.position.set(0, 0.01, 0.8);
+      scene.add(bleZone);
+    }
+
+    function buildCentralServerStructure() {
+      serverGroup = new THREE.Group();
+      serverGroup.position.set(0, 5.6, -6.2);
+      serverGroup.userData = { nodeId: 'server' };
+
+      // Clean Architectural Server Core
+      const coreGeo = new THREE.BoxGeometry(2.1, 2.5, 1.4);
+      const coreMat = new THREE.MeshStandardMaterial({
+        color: 0x161922,
+        metalness: 0.7,
+        roughness: 0.25
+      });
+      const core = new THREE.Mesh(coreGeo, coreMat);
+      core.userData = { nodeId: 'server' };
+      serverGroup.add(core);
+
+      // Subtle Edge Wireframe
+      const edges = new THREE.EdgesGeometry(coreGeo);
+      const lineMat = new THREE.LineBasicMaterial({ color: 0x6366f1, transparent: true, opacity: 0.5 });
+      const wireframe = new THREE.LineSegments(edges, lineMat);
+      serverGroup.add(wireframe);
+
+      // Two Minimal Orbiting Sync Rings
+      for (let i = 0; i < 2; i++) {
+        const rGeo = new THREE.TorusGeometry(1.75 + i * 0.35, 0.025, 16, 64);
+        const rMat = new THREE.MeshBasicMaterial({
+          color: i === 0 ? 0x6366f1 : 0x10b981,
+          transparent: true,
+          opacity: 0.65
+        });
+        const rMesh = new THREE.Mesh(rGeo, rMat);
+        rMesh.rotation.x = Math.PI / 2 + (i === 0 ? 0.18 : -0.18);
+        serverGroup.add(rMesh);
+        serverRings.push(rMesh);
+      }
+
+      // Vertical Support Axis Line to Floor
+      const axisPts = [new THREE.Vector3(0, -1.25, 0), new THREE.Vector3(0, -5.6, 0)];
+      const axisGeo = new THREE.BufferGeometry().setFromPoints(axisPts);
+      const axisLine = new THREE.Line(axisGeo, new THREE.LineBasicMaterial({ color: 0x334155, transparent: true, opacity: 0.5 }));
+      serverGroup.add(axisLine);
+
+      scene.add(serverGroup);
+    }
+
+    function buildSmartphoneNode(node) {
+      const group = new THREE.Group();
+      group.position.set(node.position.x, node.position.y, node.position.z);
+      group.userData = { nodeId: node.id };
+
+      // Precision Machined Phone Slab
+      const chassisGeo = new THREE.BoxGeometry(1.24, 0.12, 2.28);
+      const chassisMat = new THREE.MeshStandardMaterial({
+        color: 0x1e232d,
+        metalness: 0.75,
+        roughness: 0.3
+      });
+      const chassis = new THREE.Mesh(chassisGeo, chassisMat);
+      chassis.userData = { nodeId: node.id };
+      group.add(chassis);
+
+      // Subtle Edge Outline
+      const edgeGeo = new THREE.EdgesGeometry(chassisGeo);
+      const edgeLine = new THREE.LineSegments(
+        edgeGeo,
+        new THREE.LineBasicMaterial({ color: node.accentHex, transparent: true, opacity: 0.65 })
+      );
+      group.add(edgeLine);
+
+      // Screen Surface
+      const screenGeo = new THREE.PlaneGeometry(1.1, 2.12);
+      const screenMat = new THREE.MeshBasicMaterial({
+        color: node.accentHex,
+        transparent: true,
+        opacity: 0.22,
+        side: THREE.DoubleSide
+      });
+      const screen = new THREE.Mesh(screenGeo, screenMat);
+      screen.rotation.x = -Math.PI / 2;
+      screen.position.y = 0.065;
+      screen.userData = { nodeId: node.id };
+      group.add(screen);
+
+      // Hardware Secure Enclave (TEE) Module Indicator
+      const teeGeo = new THREE.BoxGeometry(0.32, 0.04, 0.32);
+      const teeMat = new THREE.MeshBasicMaterial({ color: 0xe2e8f0 });
+      const teeChip = new THREE.Mesh(teeGeo, teeMat);
+      teeChip.position.set(0, 0.08, 0.45);
+      group.add(teeChip);
+
+      // Subtle Floor Anchor Ring
+      const ringGeo = new THREE.RingGeometry(1.32, 1.38, 48);
+      const ringMat = new THREE.MeshBasicMaterial({
+        color: node.accentHex,
+        side: THREE.DoubleSide,
+        transparent: true,
+        opacity: 0.45
+      });
+      const floorRing = new THREE.Mesh(ringGeo, ringMat);
+      floorRing.rotation.x = -Math.PI / 2;
+      floorRing.position.y = -0.22;
+      group.add(floorRing);
+
+      scene.add(group);
+      nodeMeshes[node.id] = { group, chassis, screen, floorRing, edgeLine };
+    }
+
+    function buildTopologyLinks() {
+      const links = [
+        ['rahim', 'karim'],
+        ['rahim', 'hasan'],
+        ['karim', 'hasan'],
+        ['rahim', 'witnessD'],
+        ['karim', 'witnessE'],
+        ['witnessD', 'hasan'],
+        ['witnessE', 'hasan']
+      ];
+      const mat = new THREE.LineBasicMaterial({ color: 0x334155, transparent: true, opacity: 0.35 });
+      links.forEach(([idA, idB]) => {
+        const pA = simState.nodes[idA].position;
+        const pB = simState.nodes[idB].position;
+        const geo = new THREE.BufferGeometry().setFromPoints([
+          new THREE.Vector3(pA.x, 0.05, pA.z),
+          new THREE.Vector3(pB.x, 0.05, pB.z)
+        ]);
+        scene.add(new THREE.Line(geo, mat));
+      });
+    }
+
+    /***************************************************************************
+     * 6. 3D PACKET ARCS, WITNESS RINGS & SERVER UPLINK ANIMATIONS
+     ***************************************************************************/
+    function spawn3DPaymentArc(startPos, endPos, colorHex, labelText, onComplete = null, duration = 1.05) {
+      const start = new THREE.Vector3(startPos.x, startPos.y + 0.2, startPos.z);
+      const end = new THREE.Vector3(endPos.x, endPos.y + 0.2, endPos.z);
+      const mid = new THREE.Vector3().addVectors(start, end).multiplyScalar(0.5);
+      mid.y += 2.3;
+
+      const curve = new THREE.QuadraticBezierCurve3(start, mid, end);
+      const points = curve.getPoints(40);
+      const lineGeo = new THREE.BufferGeometry().setFromPoints(points);
+      const lineMat = new THREE.LineBasicMaterial({ color: colorHex, transparent: true, opacity: 0.75 });
+      const arcLine = new THREE.Line(lineGeo, lineMat);
+      scene.add(arcLine);
+
+      // Moving Packet Sphere
+      const pktGroup = new THREE.Group();
+      const sphere = new THREE.Mesh(
+        new THREE.SphereGeometry(0.18, 16, 16),
+        new THREE.MeshBasicMaterial({ color: 0xffffff })
+      );
+      const halo = new THREE.Mesh(
+        new THREE.SphereGeometry(0.32, 16, 16),
+        new THREE.MeshBasicMaterial({ color: colorHex, transparent: true, opacity: 0.55 })
+      );
+      pktGroup.add(sphere);
+      pktGroup.add(halo);
+      scene.add(pktGroup);
+
+      active3DEffects.push({
+        type: 'paymentArc',
+        curve,
+        arcLine,
+        lineMat,
+        pktGroup,
+        labelText,
+        elapsed: 0,
+        duration,
+        onComplete
+      });
+    }
+
+    function spawnWitnessSignalArc(startPos, endPos, colorHex, onComplete = null, duration = 0.65) {
+      const start = new THREE.Vector3(startPos.x, startPos.y + 0.15, startPos.z);
+      const end = new THREE.Vector3(endPos.x, endPos.y + 0.15, endPos.z);
+      const mid = new THREE.Vector3().addVectors(start, end).multiplyScalar(0.5);
+      mid.y += 1.1;
+
+      const curve = new THREE.QuadraticBezierCurve3(start, mid, end);
+      const pkt = new THREE.Mesh(
+        new THREE.SphereGeometry(0.12, 12, 12),
+        new THREE.MeshBasicMaterial({ color: colorHex })
+      );
+      scene.add(pkt);
+
+      active3DEffects.push({
+        type: 'witnessArc',
+        curve,
+        pkt,
+        elapsed: 0,
+        duration,
+        onComplete
+      });
+    }
+
+    function spawnFloorWave(centerPos, colorHex, maxScale = 10.0) {
+      const geo = new THREE.RingGeometry(0.35, 0.5, 64);
+      const mat = new THREE.MeshBasicMaterial({
+        color: colorHex,
+        side: THREE.DoubleSide,
+        transparent: true,
+        opacity: 0.75
+      });
+      const mesh = new THREE.Mesh(geo, mat);
+      mesh.rotation.x = -Math.PI / 2;
+      mesh.position.set(centerPos.x, 0.04, centerPos.z);
+      scene.add(mesh);
+
+      active3DEffects.push({
+        type: 'floorWave',
+        mesh,
+        mat,
+        elapsed: 0,
+        duration: 1.25,
+        maxScale
+      });
+    }
+
+    function spawnServerUplinkBeam(phonePos, serverPos, colorHex = 0x10b981) {
+      const start = new THREE.Vector3(phonePos.x, phonePos.y + 0.2, phonePos.z);
+      const end = new THREE.Vector3(serverPos.x, serverPos.y, serverPos.z);
+      const dist = start.distanceTo(end);
+
+      const geo = new THREE.CylinderGeometry(0.05, 0.05, dist, 12);
+      const mat = new THREE.MeshBasicMaterial({ color: colorHex, transparent: true, opacity: 0.8 });
+      const beam = new THREE.Mesh(geo, mat);
+
+      const mid = new THREE.Vector3().addVectors(start, end).multiplyScalar(0.5);
+      beam.position.copy(mid);
+      beam.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), end.clone().sub(start).normalize());
+      scene.add(beam);
+
+      active3DEffects.push({
+        type: 'uplinkBeam',
+        mesh: beam,
+        mat,
+        elapsed: 0,
+        duration: 1.0
+      });
+    }
+
+    function spawnNodeShockwave(pos, colorHex = 0xef4444) {
+      const geo = new THREE.SphereGeometry(0.55, 20, 20);
+      const mat = new THREE.MeshBasicMaterial({
+        color: colorHex,
+        wireframe: true,
+        transparent: true,
+        opacity: 0.9
+      });
+      const sphere = new THREE.Mesh(geo, mat);
+      sphere.position.set(pos.x, pos.y + 0.3, pos.z);
+      scene.add(sphere);
+
+      active3DEffects.push({
+        type: 'shockwave',
+        mesh: sphere,
+        mat,
+        elapsed: 0,
+        duration: 0.9,
+        maxScale: 3.2
+      });
+    }
+
+    /***************************************************************************
+     * 7. PROJECTED 2D HTML NODE TELEMETRY CARDS IN CENTER VIEWPORT
+     ***************************************************************************/
+    const nodeCardEls = {};
+
+    function initProjectedNodeCards() {
+      const container = document.getElementById('labels-container');
+      container.innerHTML = '';
+
+      // Central Server Card
+      const srvCard = document.createElement('div');
+      srvCard.className = 'node-card-3d';
+      srvCard.onclick = () => selectNode('server');
+      container.appendChild(srvCard);
+      nodeCardEls['server'] = srvCard;
+
+      // Smartphone Node Cards
+      Object.values(simState.nodes).forEach(node => {
+        const el = document.createElement('div');
+        el.className = 'node-card-3d';
+        el.onclick = () => selectNode(node.id);
+        container.appendChild(el);
+        nodeCardEls[node.id] = el;
+      });
+
+      refreshProjectedNodeCardsHTML();
+    }
+
+    function refreshProjectedNodeCardsHTML() {
+      // Server Card HTML
+      const sEl = nodeCardEls['server'];
+      if (sEl) {
+        sEl.classList.toggle('active-node', simState.selectedNodeId === 'server');
+        sEl.innerHTML = `
+          <div class="flex items-center justify-between gap-2">
+            <span class="text-[11px] font-semibold text-pri">Central Server</span>
+            <span class="px-1.5 py-0.5 rounded text-[9px] font-mono-code bg-indigo-500/15 text-indigo-400 font-medium">Day ${simState.dailyPeriodIdx}</span>
+          </div>
+          <div class="flex items-center justify-between text-[10px] font-mono-code text-sec mt-1 pt-1 border-t border-hair">
+            <span>Settled: <strong class="text-emerald-400">${simState.serverState.settledCount}</strong></span>
+            <span>Witnesses: <strong class="text-pri">${simState.serverState.witnessReports.length}</strong></span>
+          </div>
+        `;
+      }
+
+      // Phone Cards HTML
+      Object.values(simState.nodes).forEach(node => {
+        const el = nodeCardEls[node.id];
+        if (!el) return;
+        el.classList.toggle('active-node', simState.selectedNodeId === node.id);
+
+        const dotColor = !node.leaseValid
+          ? 'bg-red-500'
+          : (node.online ? 'bg-emerald-500' : 'bg-amber-500');
+        const connLabel = !node.leaseValid
+          ? 'Lease Expired'
+          : (node.online ? 'Online · Synced' : 'Offline · BLE');
+
+        const incomingBadge = node.locallyAcceptedBDT > 0
+          ? `<span class="text-amber-400">+৳${node.locallyAcceptedBDT} Loc</span>`
+          : (node.settledReceivedBDT > 0 ? `<span class="text-emerald-400">+৳${node.settledReceivedBDT} Set</span>` : `<span class="text-mut">On: ৳${node.onlineBalanceBDT}</span>`);
+
+        el.innerHTML = `
+          <div class="flex items-center justify-between gap-2">
+            <span class="text-xs font-semibold text-pri">${node.name}</span>
+            <span class="text-[10px] font-mono-code text-sec">${node.shortRole}</span>
+          </div>
+          <div class="flex items-center justify-between gap-2 mt-0.5">
+            <div class="flex items-center gap-1.5 text-[10px] text-sec">
+              <span class="w-1.5 h-1.5 rounded-full ${dotColor}"></span>
+              <span>${connLabel}</span>
+            </div>
+            <span class="text-[10px] font-mono-code text-sec">#${node.deviceCounter}</span>
+          </div>
+          <div class="flex items-center justify-between gap-2 mt-1.5 pt-1 border-t border-hair font-mono-code text-[11px]">
+            <span class="font-semibold text-pri">Off: ৳${node.offlineBalanceBDT}</span>
+            <span class="text-[10px]">${incomingBadge}</span>
+          </div>
+          ${node.witnessLog.length > 0 ? `
+            <div class="mt-1 px-1.5 py-0.5 rounded bg-amber-500/10 border border-amber-500/20 text-[9px] font-mono-code text-amber-400 flex items-center justify-between">
+              <span>Witness Hashes</span>
+              <span class="font-semibold">${node.witnessLog.length}</span>
+            </div>
+          ` : ''}
+        `;
+      });
+    }
+
+    function updateProjectedNodePositions() {
+      if (!camera || !stageContainer) return;
+      const width = stageContainer.clientWidth;
+      const height = stageContainer.clientHeight;
+
+      const placeElement = (worldVec, domEl) => {
+        if (!domEl) return;
+        const projected = worldVec.clone().project(camera);
+        if (projected.z > 1) {
+          domEl.style.display = 'none';
+          return;
+        }
+        const x = (projected.x * 0.5 + 0.5) * width;
+        const y = (-(projected.y * 0.5) + 0.5) * height;
+        domEl.style.display = 'block';
+        domEl.style.left = `${x}px`;
+        domEl.style.top = `${y}px`;
+      };
+
+      placeElement(new THREE.Vector3(0, 7.3, -6.2), nodeCardEls['server']);
+      Object.values(simState.nodes).forEach(node => {
+        placeElement(new THREE.Vector3(node.position.x, node.position.y + 0.85, node.position.z), nodeCardEls[node.id]);
+      });
+    }
+
+    /***************************************************************************
+     * 8. STAGE POINTER INTERACTION & CAMERA PRESETS
+     ***************************************************************************/
+    function setupStagePointerEvents(domEl) {
+      const raycaster = new THREE.Raycaster();
+      const mouse = new THREE.Vector2();
+      let downTimestamp = 0;
+
+      domEl.addEventListener('pointerdown', (e) => {
+        camOrbit.isDragging = true;
+        camOrbit.prevX = e.clientX;
+        camOrbit.prevY = e.clientY;
+        downTimestamp = performance.now();
+      });
+
+      window.addEventListener('pointermove', (e) => {
+        if (!camOrbit.isDragging) return;
+        const dx = e.clientX - camOrbit.prevX;
+        const dy = e.clientY - camOrbit.prevY;
+        camOrbit.prevX = e.clientX;
+        camOrbit.prevY = e.clientY;
+
+        camOrbit.desiredTheta -= dx * 0.006;
+        camOrbit.desiredPhi = Math.max(0.32, Math.min(1.40, camOrbit.desiredPhi - dy * 0.006));
+      });
+
+      window.addEventListener('pointerup', (e) => {
+        const dt = performance.now() - downTimestamp;
+        camOrbit.isDragging = false;
+
+        if (dt < 200 && stageContainer) {
+          const rect = stageContainer.getBoundingClientRect();
+          mouse.x = ((e.clientX - rect.left) / rect.width) * 2 - 1;
+          mouse.y = -((e.clientY - rect.top) / rect.height) * 2 + 1;
+          raycaster.setFromCamera(mouse, camera);
+          const hits = raycaster.intersectObjects(scene.children, true);
+          for (const h of hits) {
+            if (h.object && h.object.userData && h.object.userData.nodeId) {
+              selectNode(h.object.userData.nodeId);
+              break;
+            }
+          }
+        }
+      });
+
+      domEl.addEventListener('wheel', (e) => {
+        e.preventDefault();
+        camOrbit.desiredRadius = Math.max(8.5, Math.min(26.0, camOrbit.desiredRadius + e.deltaY * 0.01));
+      }, { passive: false });
+    }
+
+    function setCameraPreset(preset) {
+      ['overview', 'p2p', 'mesh', 'server'].forEach(p => {
+        const btn = document.getElementById(`cam-btn-${p}`);
+        if (!btn) return;
+        if (p === preset) {
+          btn.className = 'px-2.5 py-1 rounded-lg text-xs font-medium bg-indigo-600 text-white transition';
+        } else {
+          btn.className = 'px-2.5 py-1 rounded-lg text-xs font-medium text-sec hover:text-pri transition';
+        }
+      });
+
+      if (preset === 'overview') {
+        camOrbit.desiredTheta = 0.0;
+        camOrbit.desiredPhi = 1.04;
+        camOrbit.desiredRadius = 15.8;
+        camOrbit.desiredTarget.set(0, 1.1, 0.4);
+      } else if (preset === 'p2p') {
+        camOrbit.desiredTheta = 0.0;
+        camOrbit.desiredPhi = 0.92;
+        camOrbit.desiredRadius = 11.2;
+        camOrbit.desiredTarget.set(0, 0.4, 2.2);
+      } else if (preset === 'mesh') {
+        camOrbit.desiredTheta = 0.25;
+        camOrbit.desiredPhi = 0.62;
+        camOrbit.desiredRadius = 16.5;
+        camOrbit.desiredTarget.set(0, 0.2, 0.5);
+      } else if (preset === 'server') {
+        camOrbit.desiredTheta = 0.0;
+        camOrbit.desiredPhi = 1.18;
+        camOrbit.desiredRadius = 11.5;
+        camOrbit.desiredTarget.set(0, 4.8, -5.0);
+      }
+    }
+
+    function handleStageResize() {
+      if (!stageContainer || !renderer || !camera) return;
+      const w = stageContainer.clientWidth;
+      const h = stageContainer.clientHeight;
+      camera.aspect = w / h;
+      camera.updateProjectionMatrix();
+      renderer.setSize(w, h);
+    }
+
+    /***************************************************************************
+     * 9. STUDIO THEME SWITCHER & UI RENDERING
+     ***************************************************************************/
+    function toggleStudioTheme() {
+      simState.theme = simState.theme === 'dark' ? 'light' : 'dark';
+      document.documentElement.setAttribute('data-theme', simState.theme);
+
+      if (scene) {
+        const bgHex = simState.theme === 'dark' ? 0x0B0C0E : 0xF1F5F9;
+        scene.background.setHex(bgHex);
+        scene.fog.color.setHex(bgHex);
+      }
+    }
+
+    function updateContextBanner(tag, title, desc, dotClass, layers) {
+      simState.banner = {
+        tag,
+        timeTag: `${formatClockTime(simState.simClockSec)} · Epoch ${simState.currentEpoch}`,
+        title,
+        desc,
+        statusColor: dotClass || 'bg-indigo-500',
+        layers: layers || []
+      };
+      renderBannerUI();
+    }
+
+    function renderBannerUI() {
+      const b = simState.banner;
+      document.getElementById('banner-status-dot').className = `w-2 h-2 rounded-full ${b.statusColor}`;
+      document.getElementById('banner-step-tag').textContent = b.tag;
+      document.getElementById('banner-time-tag').textContent = `${formatClockTime(simState.simClockSec)} · Epoch ${simState.currentEpoch}`;
+      document.getElementById('banner-title').textContent = b.title;
+      document.getElementById('banner-description').textContent = b.desc;
+
+      const layersRow = document.getElementById('banner-layers-row');
+      layersRow.innerHTML = b.layers.map(l => `
+        <span class="px-2 py-0.5 rounded text-[10px] font-mono-code surface-card text-sec">${l}</span>
+      `).join('');
+    }
+
+    function renderAllUI() {
+      renderHeaderClockUI();
+      renderBannerUI();
+      refreshProjectedNodeCardsHTML();
+      renderScenarioListUI();
+      renderSandboxUI();
+      renderInspectorUI();
+    }
+
+    function renderHeaderClockUI() {
+      const rem = Math.ceil(simState.epochRemainingSec);
+      const pct = (simState.epochRemainingSec / PROTOCOL_RULES.epochDurationSec) * 100;
+      document.getElementById('hdr-epoch-countdown').textContent = `00:${String(rem).padStart(2, '0')}s`;
+      document.getElementById('hdr-epoch-bar').style.width = `${pct.toFixed(1)}%`;
+
+      document.getElementById('hdr-prev-epoch').textContent = `E-${simState.currentEpoch - 1}`;
+      document.getElementById('hdr-curr-epoch').textContent = `E-${simState.currentEpoch}`;
+      document.getElementById('hdr-next-epoch').textContent = `E-${simState.currentEpoch + 1}`;
+      document.getElementById('hdr-sim-clock').textContent = formatClockTime(simState.simClockSec);
+      document.getElementById('hdr-daily-label').textContent = `· Day ${simState.dailyPeriodIdx} (4 PM)`;
+
+      const kt = deriveHMAC(`Kd_Day${simState.dailyPeriodIdx}`, simState.currentEpoch);
+      document.getElementById('hdr-kt-formula').textContent = `Kt = HMAC(Kd, ${simState.currentEpoch}) = ${kt.slice(0, 10)}..`;
+    }
+
+    function toggleClockPause() {
+      simState.clockSpeed = simState.clockSpeed === 0 ? 1 : 0;
+      const dot = document.getElementById('clock-state-dot');
+      const lbl = document.getElementById('clock-state-label');
+      if (simState.clockSpeed === 0) {
+        dot.className = 'w-1.5 h-1.5 rounded-full bg-amber-500';
+        lbl.textContent = 'Paused';
+      } else {
+        dot.className = 'w-1.5 h-1.5 rounded-full bg-emerald-500';
+        lbl.textContent = '1x';
+      }
+    }
+
+    function manualAdvanceEpoch() {
+      simState.currentEpoch += 1;
+      simState.epochRemainingSec = 30.0;
+      simState.simClockSec += 30;
+      spawnFloorWave({ x: 0, y: 0.05, z: 0.5 }, 0x6366f1, 12.5);
+      updateContextBanner(
+        `30-SECOND SCHEDULE ROTATION · EPOCH ${simState.currentEpoch}`,
+        `Active Cryptographic Credential Rotated to Epoch ${simState.currentEpoch}`,
+        `All participating devices simultaneously transitioned to Epoch ${simState.currentEpoch}. Tolerance window is now [${simState.currentEpoch - 1}, ${simState.currentEpoch}, ${simState.currentEpoch + 1}].`,
+        'bg-indigo-500',
+        [`Active Epoch: E-${simState.currentEpoch}`, `Window: E-${simState.currentEpoch - 1}..E-${simState.currentEpoch + 1}`]
+      );
+      renderAllUI();
+    }
+
+    // Guided Scenario Controls
+    function renderScenarioListUI() {
+      const container = document.getElementById('scenario-steps-container');
+      if (!container) return;
+
+      const currentHumanStep = Math.min(SCENARIO_STEPS.length, Math.max(1, simState.scenarioStepIdx));
+      document.getElementById('scenario-step-indicator').textContent = currentHumanStep;
+
+      container.innerHTML = SCENARIO_STEPS.map((s, idx) => {
+        const isCurrent = idx === simState.scenarioStepIdx - 1;
+        const isCompleted = idx < simState.scenarioStepIdx - 1;
+
+        const cardStyle = isCurrent
+          ? 'border-indigo-500 bg-indigo-500/10'
+          : (isCompleted ? 'border-emerald-500/30 opacity-85' : '');
+
+        const badgeHTML = isCompleted
+          ? `<span class="w-5 h-5 rounded-full bg-emerald-500/20 text-emerald-400 font-mono-code text-[10px] flex items-center justify-center font-semibold">&#10003;</span>`
+          : `<span class="w-5 h-5 rounded-full ${isCurrent ? 'bg-indigo-600 text-white' : 'bg-slate-500/15 text-sec'} font-mono-code text-[10px] flex items-center justify-center font-semibold">${s.step}</span>`;
+
+        return `
+          <div onclick="jumpToScenarioStep(${idx})" class="p-3 rounded-xl surface-card surface-card-interactive cursor-pointer ${cardStyle}">
+            <div class="flex items-start gap-2.5">
+              <div class="mt-0.5 shrink-0">${badgeHTML}</div>
+              <div class="flex-1 min-w-0">
+                <div class="flex items-center justify-between gap-2">
+                  <span class="text-xs font-semibold text-pri truncate">${s.title}</span>
+                  <span class="text-[10px] font-mono-code text-indigo-400 shrink-0">${s.time}</span>
+                </div>
+                <p class="text-[11px] text-sec mt-1 leading-relaxed">${s.summary}</p>
+              </div>
+            </div>
+          </div>
+        `;
+      }).join('');
+    }
+
+    function jumpToScenarioStep(idx) {
+      const stepObj = SCENARIO_STEPS[idx];
+      if (!stepObj) return;
+      simState.scenarioStepIdx = idx + 1;
+      stepObj.action();
+      updateContextBanner(
+        `SCENARIO STEP ${stepObj.step} OF 7 · ${stepObj.time}`,
+        stepObj.title,
+        stepObj.detail,
+        'bg-indigo-500',
+        stepObj.layers
+      );
+      renderAllUI();
+    }
+
+    function runNextScenarioStep() {
+      if (simState.scenarioStepIdx >= SCENARIO_STEPS.length) {
+        resetFullSimulation();
+        return;
+      }
+      jumpToScenarioStep(simState.scenarioStepIdx);
+    }
+
+    function runPrevScenarioStep() {
+      if (simState.scenarioStepIdx <= 1) return;
+      jumpToScenarioStep(simState.scenarioStepIdx - 2);
+    }
+
+    function toggleAutoPlayScenario() {
+      const btn = document.getElementById('btn-autoplay');
+      if (simState.autoPlayTimer) {
+        clearInterval(simState.autoPlayTimer);
+        simState.autoPlayTimer = null;
+        btn.textContent = 'Auto-Play';
+        btn.classList.remove('bg-indigo-600', 'text-white');
+      } else {
+        btn.textContent = 'Stop Auto';
+        btn.classList.add('bg-indigo-600', 'text-white');
+        runNextScenarioStep();
+        simState.autoPlayTimer = setInterval(() => {
+          if (simState.scenarioStepIdx >= SCENARIO_STEPS.length) {
+            toggleAutoPlayScenario();
+          } else {
+            runNextScenarioStep();
+          }
+        }, 3400);
+      }
+    }
+
+    // Sandbox Controls
+    function setSandboxAmount(val) {
+      const slider = document.getElementById('sandbox-amount-slider');
+      if (slider) {
+        slider.value = val;
+        updateSandboxPreview();
+      }
+    }
+
+    function updateSandboxPreview() {
+      const slider = document.getElementById('sandbox-amount-slider');
+      if (!slider) return;
+      const val = parseInt(slider.value, 10);
+      document.getElementById('sandbox-amount-bdt').textContent = `৳${val}`;
+      document.getElementById('sandbox-amount-poisha').textContent = `(${(val * 100).toLocaleString()} poisha)`;
+    }
+
+    function executeSandboxTransfer() {
+      const senderId = document.getElementById('sandbox-sender').value;
+      const receiverId = document.getElementById('sandbox-receiver').value;
+      const amountBDT = parseInt(document.getElementById('sandbox-amount-slider').value, 10);
+      if (senderId === receiverId) {
+        updateContextBanner(
+          'INVALID PEER SELECTION',
+          'Sender and Receiver Must Be Distinct Devices',
+          'Please choose two different smartphones in the network to simulate a Bluetooth peer-to-peer transfer.',
+          'bg-amber-500',
+          ['Validation Guard']
+        );
+        return;
+      }
+      executeOfflineTransfer(senderId, receiverId, amountBDT, null, true);
+    }
+
+    function renderSandboxUI() {
+      const matrix = document.getElementById('sandbox-node-matrix');
+      if (!matrix) return;
+
+      matrix.innerHTML = Object.values(simState.nodes).map(n => {
+        const badgeClass = n.online
+          ? 'bg-emerald-500/15 text-emerald-400 border-emerald-500/30'
+          : 'bg-slate-500/10 text-sec border-hair';
+
+        return `
+          <div class="p-2.5 rounded-lg surface-card flex items-center justify-between gap-2">
+            <div>
+              <div class="text-xs font-semibold text-pri">${n.name} <span class="text-[10px] font-mono-code text-sec">(${n.walletId})</span></div>
+              <div class="text-[10px] font-mono-code text-sec">Offline: ৳${n.offlineBalanceBDT} · Witness Log: ${n.witnessLog.length}</div>
+            </div>
+            <button onclick="toggleNodeConnectivity('${n.id}')" class="px-2.5 py-1 rounded text-[11px] font-mono-code font-medium border transition ${badgeClass}">
+              ${n.online ? 'ONLINE (Synced)' : 'OFFLINE (BLE)'}
+            </button>
+          </div>
+        `;
+      }).join('');
+    }
+
+    // Right Inspector Rendering
+    function selectNode(nodeId) {
+      simState.selectedNodeId = nodeId;
+      switchInspectorTab('node');
+      renderAllUI();
+    }
+
+    function renderInspectorUI() {
+      // 1. Node Selector Buttons
+      const selContainer = document.getElementById('inspector-node-selector');
+      if (selContainer) {
+        const items = [
+          { id: 'rahim', label: 'Rahim (A)' },
+          { id: 'karim', label: 'Karim (B)' },
+          { id: 'hasan', label: 'Hasan (C)' },
+          { id: 'witnessD', label: 'Phone D' },
+          { id: 'witnessE', label: 'Phone E' },
+          { id: 'server', label: 'Server' }
+        ];
+        selContainer.innerHTML = items.map(it => {
+          const active = simState.selectedNodeId === it.id;
+          return `
+            <button onclick="selectNode('${it.id}')" class="py-1.5 px-2 rounded-lg text-[11px] font-medium border transition ${active ? 'bg-indigo-600 text-white border-indigo-500' : 'surface-card text-sec hover:text-pri'}">
+              ${it.label}
+            </button>
+          `;
+        }).join('');
+      }
+
+      // 2. Selected Node Detail View
+      const detailEl = document.getElementById('inspector-node-detail');
+      if (detailEl) {
+        if (simState.selectedNodeId === 'server') {
+          detailEl.innerHTML = `
+            <div class="p-3.5 rounded-xl surface-card space-y-3">
+              <div class="flex items-center justify-between">
+                <div>
+                  <div class="text-[10px] font-mono-code uppercase text-indigo-400 font-semibold">Central Authority</div>
+                  <h4 class="text-sm font-semibold text-pri">Reconciliation Server</h4>
+                </div>
+                <span class="px-2 py-0.5 rounded text-[10px] font-mono-code bg-emerald-500/15 text-emerald-400 border border-emerald-500/30">ACTIVE</span>
+              </div>
+              <div class="grid grid-cols-2 gap-2 text-xs font-mono-code">
+                <div class="p-2.5 rounded-lg surface-panel border border-hair">
+                  <div class="text-[10px] text-sec">Daily Schedule</div>
+                  <div class="font-semibold text-pri mt-0.5">Day ${simState.dailyPeriodIdx} (${simState.dailyEpochStr})</div>
+                </div>
+                <div class="p-2.5 rounded-lg surface-panel border border-hair">
+                  <div class="text-[10px] text-sec">Settled Payments</div>
+                  <div class="font-semibold text-emerald-400 mt-0.5">${simState.serverState.settledCount} Finalized</div>
+                </div>
+              </div>
+              <div class="space-y-1.5">
+                <div class="text-[10px] font-mono-code uppercase text-sec font-semibold">Uploaded Witness Hashes (${simState.serverState.witnessReports.length})</div>
+                <div class="max-h-48 overflow-y-auto space-y-1 font-mono-code text-[10px]">
+                  ${simState.serverState.witnessReports.length === 0
+                    ? '<div class="text-mut py-2">No witness reports uploaded yet. Toggle a phone Online to synchronize.</div>'
+                    : simState.serverState.witnessReports.map(r => `
+                      <div class="p-2 rounded surface-panel border border-hair flex items-center justify-between">
+                        <span class="text-pri">${r.txId} · #${r.counter}</span>
+                        <span class="text-indigo-400">via ${r.reporter}</span>
+                      </div>
+                    `).join('')}
+                </div>
+              </div>
+            </div>
+          `;
+        } else {
+          const n = simState.nodes[simState.selectedNodeId] || simState.nodes.rahim;
+          const totalBDT = n.onlineBalanceBDT + n.offlineBalanceBDT;
+          const offPct = Math.min(100, Math.round((n.offlineBalanceBDT / PROTOCOL_RULES.maxOfflineBalanceBDT) * 100));
+          const ktNode = deriveHMAC(n.deviceSecretKd, simState.currentEpoch);
+
+          detailEl.innerHTML = `
+            <div class="p-3.5 rounded-xl surface-card space-y-3.5">
+              <div class="flex items-center justify-between">
+                <div>
+                  <div class="text-[10px] font-mono-code uppercase text-indigo-400 font-semibold">${n.role}</div>
+                  <h4 class="text-sm font-semibold text-pri">${n.name} <span class="text-xs font-mono-code text-sec">(${n.walletId})</span></h4>
+                </div>
+                <button onclick="toggleNodeConnectivity('${n.id}')" class="px-2.5 py-1 rounded-md text-[11px] font-mono-code font-medium border transition ${n.online ? 'bg-emerald-500/15 text-emerald-400 border-emerald-500/30' : 'surface-panel text-sec border-hair hover:text-pri'}">
+                  ${n.online ? 'Online · Synced' : 'Offline · BLE'}
+                </button>
+              </div>
+
+              <!-- Logical Wallet Split (Section 6) -->
+              <div class="p-3 rounded-lg surface-panel border border-hair space-y-2.5">
+                <div class="flex items-center justify-between text-xs">
+                  <span class="text-sec">Total Logical Wallet</span>
+                  <span class="font-mono-code font-semibold text-pri">৳${totalBDT.toLocaleString()}</span>
+                </div>
+                <div class="grid grid-cols-2 gap-2">
+                  <div class="p-2 rounded surface-card">
+                    <div class="text-[10px] text-sec">Online Server Balance</div>
+                    <div class="text-sm font-mono-code font-semibold text-pri mt-0.5">৳${n.onlineBalanceBDT.toLocaleString()}</div>
+                  </div>
+                  <div class="p-2 rounded surface-card border-l-2 border-l-indigo-500">
+                    <div class="text-[10px] text-sec">Offline Hardware Wallet</div>
+                    <div class="text-sm font-mono-code font-semibold text-indigo-400 mt-0.5">৳${n.offlineBalanceBDT.toLocaleString()}</div>
+                  </div>
+                </div>
+                <div>
+                  <div class="flex justify-between text-[10px] font-mono-code text-sec mb-1">
+                    <span>Offline Allocation (Max ৳1,000)</span>
+                    <span>${offPct}%</span>
+                  </div>
+                  <div class="w-full h-1.5 bg-slate-500/20 rounded-full overflow-hidden">
+                    <div class="h-full bg-indigo-500 transition-all duration-300" style="width: ${offPct}%"></div>
+                  </div>
+                </div>
+                ${(n.locallyAcceptedBDT > 0 || n.settledReceivedBDT > 0) ? `
+                  <div class="pt-2 border-t border-hair flex items-center justify-between text-[11px] font-mono-code">
+                    <span class="text-amber-400">Locally Accepted: +৳${n.locallyAcceptedBDT}</span>
+                    <span class="text-emerald-400">Settled: +৳${n.settledReceivedBDT}</span>
+                  </div>
+                ` : ''}
+              </div>
+
+              <!-- Hardware TEE & Cryptographic Schedule Telemetry -->
+              <div class="grid grid-cols-2 gap-2 text-[11px]">
+                <div class="p-2.5 rounded-lg surface-panel border border-hair">
+                  <div class="text-[10px] text-sec">TEE Monotonic Counter</div>
+                  <div class="font-mono-code font-semibold text-emerald-400 mt-0.5">#${n.deviceCounter}</div>
+                </div>
+                <div class="p-2.5 rounded-lg surface-panel border border-hair">
+                  <div class="text-[10px] text-sec">24h Server Auth Lease</div>
+                  <div class="font-mono-code font-semibold ${n.leaseValid ? 'text-pri' : 'text-red-400'} mt-0.5">${n.leaseValid ? `${n.leaseHours.toFixed(1)}h Remaining` : 'EXPIRED'}</div>
+                </div>
+                <div class="p-2.5 rounded-lg surface-panel border border-hair col-span-2">
+                  <div class="flex justify-between text-[10px] text-sec">
+                    <span>Hardware Attestation</span>
+                    <span class="font-mono-code text-emerald-400">${n.hardwareEnclave}</span>
+                  </div>
+                  <div class="flex justify-between text-[10px] text-sec mt-1 pt-1 border-t border-hair font-mono-code">
+                    <span>Active Epoch Key (Kt):</span>
+                    <span class="text-indigo-400">${ktNode.slice(0, 14)}...</span>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Witness Log on this Device -->
+              <div class="space-y-1.5">
+                <div class="text-[10px] font-mono-code uppercase text-sec font-semibold">Captured BLE Witness Evidence (${n.witnessLog.length})</div>
+                <div class="max-h-32 overflow-y-auto space-y-1 font-mono-code text-[10px]">
+                  ${n.witnessLog.length === 0
+                    ? '<div class="text-mut py-1">No nearby transaction announcements captured yet.</div>'
+                    : n.witnessLog.map(w => `
+                      <div class="p-2 rounded surface-panel border border-hair flex items-center justify-between">
+                        <span class="text-pri">${w.txId} · ${w.senderWallet} (#${w.counter})</span>
+                        <span class="text-amber-400">E-${w.epoch}</span>
+                      </div>
+                    `).join('')}
+                </div>
+              </div>
+            </div>
+          `;
+        }
+      }
+
+      // 3. Packet JSON & Verification Pipeline
+      const jsonPre = document.getElementById('inspector-json-pre');
+      if (jsonPre && simState.latestPayload) {
+        jsonPre.textContent = JSON.stringify(simState.latestPayload, null, 2);
+      }
+
+      const verList = document.getElementById('inspector-verification-list');
+      if (verList) {
+        verList.innerHTML = simState.latestChecks.map(c => `
+          <div class="p-2.5 rounded-lg border ${c.passed ? 'bg-emerald-500/10 border-emerald-500/25' : 'bg-red-500/10 border-red-500/30'} flex items-start gap-2">
+            <span class="font-mono-code text-xs font-bold ${c.passed ? 'text-emerald-400' : 'text-red-400'}">${c.passed ? 'PASS' : 'FAIL'}</span>
+            <div class="flex-1 min-w-0">
+              <div class="text-xs font-semibold text-pri">${c.title}</div>
+              <div class="text-[10px] font-mono-code text-sec mt-0.5">${c.detail}</div>
+            </div>
+          </div>
+        `).join('');
+      }
+
+      // 4. Reconciliation Ledger List
+      document.getElementById('ledger-count-pill').textContent = simState.transactions.length;
+      const ledgerEl = document.getElementById('inspector-ledger-list');
+      if (ledgerEl) {
+        if (simState.transactions.length === 0) {
+          ledgerEl.innerHTML = `
+            <div class="p-6 rounded-xl surface-card text-center text-xs text-sec">
+              No transactions recorded yet. Step through the <strong>Guided Scenario</strong> or transmit a payment in the <strong>Live Sandbox</strong>.
+            </div>
+          `;
+        } else {
+          ledgerEl.innerHTML = simState.transactions.map((tx, idx) => {
+            let badge = '';
+            if (tx.status === 'Settled') {
+              badge = `<span class="px-2 py-0.5 rounded text-[10px] font-mono-code font-semibold bg-emerald-500/15 text-emerald-400 border border-emerald-500/30">Settled</span>`;
+            } else if (tx.status === 'Pending Reconciliation') {
+              badge = `<span class="px-2 py-0.5 rounded text-[10px] font-mono-code font-semibold bg-blue-500/15 text-blue-400 border border-blue-500/30">Pending Reconcil.</span>`;
+            } else if (tx.status === 'Locally Accepted') {
+              badge = `<span class="px-2 py-0.5 rounded text-[10px] font-mono-code font-semibold bg-amber-500/15 text-amber-400 border border-amber-500/30">Locally Accepted</span>`;
+            } else {
+              badge = `<span class="px-2 py-0.5 rounded text-[10px] font-mono-code font-semibold bg-red-500/15 text-red-400 border border-red-500/30">${tx.status}</span>`;
+            }
+
+            return `
+              <div onclick="inspectTransactionByIndex(${idx})" class="p-3 rounded-xl surface-card surface-card-interactive cursor-pointer space-y-1.5">
+                <div class="flex items-center justify-between">
+                  <span class="font-mono-code text-xs font-semibold text-indigo-400">${tx.transaction_id}</span>
+                  ${badge}
+                </div>
+                <div class="flex items-center justify-between text-xs">
+                  <span class="font-medium text-pri">${tx.senderName} &rarr; ${tx.receiverName}</span>
+                  <span class="font-mono-code font-semibold text-pri">৳${tx.amountBDT} <span class="text-[10px] text-sec">(${tx.amount}p)</span></span>
+                </div>
+                <div class="flex items-center justify-between text-[10px] font-mono-code text-sec pt-1 border-t border-hair">
+                  <span>Epoch ${tx.time_epoch} · #${tx.device_counter}</span>
+                  <span>Witnesses: ${tx.witnesses && tx.witnesses.length ? tx.witnesses.join(', ') : 'None'}</span>
+                </div>
+              </div>
+            `;
+          }).join('');
+        }
+      }
+    }
+
+    function inspectTransactionByIndex(idx) {
+      const tx = simState.transactions[idx];
+      if (!tx) return;
+      simState.latestPayload = {
+        transaction_id: tx.transaction_id,
+        sender_wallet: tx.sender_wallet,
+        receiver_wallet: tx.receiver_wallet,
+        amount: tx.amount,
+        currency: tx.currency,
+        time_epoch: tx.time_epoch,
+        daily_epoch: tx.daily_epoch,
+        device_counter: tx.device_counter,
+        nonce: tx.nonce,
+        sender_signature: tx.sender_signature,
+        encrypted_payload: tx.encrypted_payload
+      };
+      switchInspectorTab('packet');
+      renderAllUI();
+    }
+
+    // Mode & Inspector Tab Switchers
+    function switchModeTab(mode) {
+      simState.activeMode = mode;
+      ['scenario', 'sandbox', 'security'].forEach(m => {
+        const panel = document.getElementById(`panel-mode-${m}`);
+        const btn = document.getElementById(`mode-btn-${m}`);
+        if (m === mode) {
+          panel.classList.remove('hidden');
+          btn.className = 'px-3 py-1.5 rounded-md text-xs font-medium transition flex items-center gap-1.5 bg-indigo-600 text-white shadow-sm';
+        } else {
+          panel.classList.add('hidden');
+          btn.className = 'px-3 py-1.5 rounded-md text-xs font-medium transition flex items-center gap-1.5 text-sec hover:text-pri';
+        }
+      });
+    }
+
+    function switchInspectorTab(tab) {
+      simState.activeInspectorTab = tab;
+      ['node', 'packet', 'ledger'].forEach(t => {
+        const view = document.getElementById(`insp-view-${t}`);
+        const btn = document.getElementById(`insp-tab-${t}`);
+        if (t === tab) {
+          view.classList.remove('hidden');
+          btn.className = 'py-1.5 px-2 rounded-md text-xs font-medium bg-indigo-600 text-white shadow-sm transition';
+        } else {
+          view.classList.add('hidden');
+          btn.className = 'py-1.5 px-2 rounded-md text-xs font-medium text-sec hover:text-pri transition';
+        }
+      });
+    }
+
+    function copyPayloadJSON() {
+      if (!simState.latestPayload) return;
+      const ta = document.createElement('textarea');
+      ta.value = JSON.stringify(simState.latestPayload, null, 2);
+      document.body.appendChild(ta);
+      ta.select();
+      document.execCommand('copy');
+      document.body.removeChild(ta);
+
+      const btn = document.getElementById('btn-copy-json');
+      btn.textContent = 'Copied!';
+      setTimeout(() => { btn.textContent = 'Copy JSON'; }, 1400);
+    }
+
+    function resetFullSimulation() {
+      if (simState.autoPlayTimer) toggleAutoPlayScenario();
+      simState.currentEpoch = 100;
+      simState.epochRemainingSec = 30.0;
+      simState.simClockSec = 16 * 3600;
+      simState.dailyEpochStr = '2026-11-07';
+      simState.dailyPeriodIdx = 1;
+      simState.scenarioStepIdx = 1;
+      simState.transactions = [];
+      simState.serverState = { settledCount: 0, witnessReports: [], flaggedForks: [] };
+
+      const defaults = {
+        rahim: { on: 4000, off: 1000, cnt: 184 },
+        karim: { on: 2500, off: 400, cnt: 92 },
+        hasan: { on: 3200, off: 600, cnt: 41 },
+        witnessD: { on: 1800, off: 500, cnt: 19 },
+        witnessE: { on: 2100, off: 750, cnt: 63 }
+      };
+
+      Object.keys(defaults).forEach(id => {
+        const n = simState.nodes[id];
+        n.onlineBalanceBDT = defaults[id].on;
+        n.offlineBalanceBDT = defaults[id].off;
+        n.locallyAcceptedBDT = 0;
+        n.settledReceivedBDT = 0;
+        n.deviceCounter = defaults[id].cnt;
+        n.offlineTxCount = 0;
+        n.online = false;
+        n.leaseHours = 24.0;
+        n.leaseValid = true;
+        n.witnessLog = [];
+      });
+
+      initDefaultPayload();
+      SCENARIO_STEPS[0].action();
+      updateContextBanner(
+        'PROTOCOL STATE · EPOCH 100',
+        '4:00 PM — Daily Cryptographic Authorization Active',
+        'All registered devices follow the synchronized 30-second HMAC schedule. Rahim has allocated ৳1,000 to his hardware-protected offline wallet (৳4,000 remains online).',
+        'bg-indigo-500',
+        ['Layer 1: Daily Server Auth (Day 1)', 'Layer 3: 30s HMAC Schedule (E-100)', 'Layer 9: TEE Counter #184']
+      );
+      renderAllUI();
+    }
+
+    /***************************************************************************
+     * 10. MAIN ANIMATION LOOP
+     ***************************************************************************/
+    let lastTime = performance.now();
+
+    function animateLoop() {
+      requestAnimationFrame(animateLoop);
+
+      const now = performance.now();
+      const dt = Math.min(0.1, (now - lastTime) / 1000);
+      lastTime = now;
+
+      // 1. Update Global 30-Second Cryptographic Epoch Timer
+      if (simState.clockSpeed > 0) {
+        const delta = dt * simState.clockSpeed;
+        simState.epochRemainingSec -= delta;
+        simState.simClockSec += delta;
+
+        if (simState.epochRemainingSec <= 0) {
+          simState.currentEpoch += 1;
+          simState.epochRemainingSec = PROTOCOL_RULES.epochDurationSec;
+          spawnFloorWave({ x: 0, y: 0.05, z: 0.5 }, 0x6366f1, 12.0);
+        }
+        renderHeaderClockUI();
+      }
+
+      // 2. Smooth Spherical Camera Damping
+      camOrbit.theta += (camOrbit.desiredTheta - camOrbit.theta) * 0.09;
+      camOrbit.phi += (camOrbit.desiredPhi - camOrbit.phi) * 0.09;
+      camOrbit.radius += (camOrbit.desiredRadius - camOrbit.radius) * 0.09;
+      camOrbit.target.lerp(camOrbit.desiredTarget, 0.09);
+
+      camera.position.x = camOrbit.target.x + camOrbit.radius * Math.sin(camOrbit.phi) * Math.sin(camOrbit.theta);
+      camera.position.y = camOrbit.target.y + camOrbit.radius * Math.cos(camOrbit.phi);
+      camera.position.z = camOrbit.target.z + camOrbit.radius * Math.sin(camOrbit.phi) * Math.cos(camOrbit.theta);
+      camera.lookAt(camOrbit.target);
+
+      // 3. Subtle Idle Motion on Server Rings
+      serverRings.forEach((r, idx) => {
+        r.rotation.z += dt * (0.32 + idx * 0.15) * (idx % 2 === 0 ? 1 : -1);
+      });
+
+      // 4. Update Active 3D Packet Arcs, Waves, and Floating In-Flight Callout
+      const calloutEl = document.getElementById('inflight-packet-label');
+      let activePrimaryArc = null;
+
+      for (let i = active3DEffects.length - 1; i >= 0; i--) {
+        const eff = active3DEffects[i];
+        eff.elapsed += dt;
+        const t = Math.min(1, eff.elapsed / eff.duration);
+
+        if (eff.type === 'paymentArc') {
+          const pt = eff.curve.getPoint(t);
+          eff.pktGroup.position.copy(pt);
+          eff.lineMat.opacity = (1 - t * 0.6) * 0.8;
+          activePrimaryArc = { pt, text: eff.labelText };
+
+          if (t >= 1) {
+            scene.remove(eff.arcLine);
+            scene.remove(eff.pktGroup);
+            if (eff.onComplete) eff.onComplete();
+            active3DEffects.splice(i, 1);
+          }
+        } else if (eff.type === 'witnessArc') {
+          const pt = eff.curve.getPoint(t);
+          eff.pkt.position.copy(pt);
+          if (t >= 1) {
+            scene.remove(eff.pkt);
+            if (eff.onComplete) eff.onComplete();
+            active3DEffects.splice(i, 1);
+          }
+        } else if (eff.type === 'floorWave') {
+          const s = 1 + t * eff.maxScale;
+          eff.mesh.scale.set(s, s, 1);
+          eff.mat.opacity = (1 - t) * 0.65;
+          if (t >= 1) {
+            scene.remove(eff.mesh);
+            active3DEffects.splice(i, 1);
+          }
+        } else if (eff.type === 'uplinkBeam') {
+          eff.mat.opacity = Math.sin((1 - t) * Math.PI) * 0.85;
+          if (t >= 1) {
+            scene.remove(eff.mesh);
+            active3DEffects.splice(i, 1);
+          }
+        } else if (eff.type === 'shockwave') {
+          const s = 1 + t * eff.maxScale;
+          eff.mesh.scale.set(s, s, s);
+          eff.mesh.rotation.y += dt * 3.0;
+          eff.mat.opacity = 1 - t;
+          if (t >= 1) {
+            scene.remove(eff.mesh);
+            active3DEffects.splice(i, 1);
+          }
+        }
+      }
+
+      // Position floating 3D callout above in-flight payment packet
+      if (calloutEl && stageContainer) {
+        if (activePrimaryArc) {
+          const proj = activePrimaryArc.pt.clone().project(camera);
+          const x = (proj.x * 0.5 + 0.5) * stageContainer.clientWidth;
+          const y = (-(proj.y * 0.5) + 0.5) * stageContainer.clientHeight;
+          calloutEl.textContent = activePrimaryArc.text;
+          calloutEl.style.left = `${x}px`;
+          calloutEl.style.top = `${y}px`;
+          calloutEl.style.opacity = '1';
+        } else {
+          calloutEl.style.opacity = '0';
+        }
+      }
+
+      renderer.render(scene, camera);
+      updateProjectedNodePositions();
+    }
+
+    window.onload = function () {
+      initDefaultPayload();
+      initThreeStage();
+      initProjectedNodeCards();
+      simState.scenarioStepIdx = 1;
+      renderAllUI();
+      animateLoop();
+    };
+  </script>
+</body>
+</html>
